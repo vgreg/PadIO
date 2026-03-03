@@ -3,7 +3,7 @@
 //  PadIO
 //
 //  Floating NSPanel HUD showing all button mappings for the current profile/mode.
-//  Triggered by the "menu" button. Navigate with dpad; close with B, X, or LT.
+//  Triggered by the "menu" button. Navigate with dpad; A/RT = trigger; B/X/LT = close.
 
 import AppKit
 import SwiftUI
@@ -35,6 +35,7 @@ final class HelpViewModel {
 
 struct HelpView: View {
     let viewModel: HelpViewModel
+    let onTrigger: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -89,6 +90,7 @@ struct HelpView: View {
             // Hint row
             HStack(spacing: 16) {
                 hintLabel(icon: "arrowkeys", text: "Scroll")
+                hintLabel(icon: "a.circle", text: "Trigger")
                 hintLabel(icon: "b.circle", text: "Close")
             }
             .padding(.vertical, 8)
@@ -142,14 +144,16 @@ struct HelpView: View {
 final class HelpController {
     private var panel: NSPanel?
     private let viewModel = HelpViewModel()
+    private var onTrigger: ((String) -> Void)?
 
     // MARK: - Show / Hide
 
-    func show(profileName: String, modeName: String, entries: [(button: String, action: String)]) {
+    func show(profileName: String, modeName: String, entries: [(button: String, action: String)], onTrigger: @escaping (String) -> Void) {
         viewModel.profileName = profileName
         viewModel.modeName = modeName
         viewModel.entries = entries
         viewModel.highlightedIndex = 0
+        self.onTrigger = onTrigger
 
         if panel == nil { createPanel() }
 
@@ -179,6 +183,15 @@ final class HelpController {
         case .dpadDown:
             viewModel.scrollDown()
             return true
+        case .a, .rt:
+            let index = viewModel.highlightedIndex
+            if viewModel.entries.indices.contains(index) {
+                let buttonName = viewModel.entries[index].button
+                let callback = onTrigger
+                hide()
+                callback?(buttonName)
+            }
+            return true
         case .b, .x, .lt, .menu:
             hide()
             return true
@@ -205,7 +218,7 @@ final class HelpController {
         p.hasShadow = true
         p.hidesOnDeactivate = false
 
-        let view = HelpView(viewModel: viewModel, onClose: { [weak self] in self?.hide() })
+        let view = HelpView(viewModel: viewModel, onTrigger: {}, onClose: { [weak self] in self?.hide() })
         let hosting = NSHostingView(rootView: view)
         hosting.translatesAutoresizingMaskIntoConstraints = false
         p.contentView = hosting

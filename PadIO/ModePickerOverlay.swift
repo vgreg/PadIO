@@ -69,7 +69,9 @@ struct ModePickerView: View {
                     }
                 }
             }
-            .frame(maxHeight: 260)
+            // Each row is ~36pt tall (7pt padding × 2 + ~22pt text) plus 6pt top/bottom list padding.
+            // Cap at 10 visible rows; beyond that the scroll view handles navigation.
+            .frame(height: min(CGFloat(viewModel.modes.count) * 36 + 12, 372))
 
             Divider()
 
@@ -77,7 +79,7 @@ struct ModePickerView: View {
             HStack(spacing: 16) {
                 hintLabel(icon: "arrowkeys", text: "Navigate")
                 hintLabel(icon: "a.circle", text: "Select")
-                hintLabel(icon: "x.circle", text: "Cancel")
+                hintLabel(icon: "b.circle", text: "Cancel")
             }
             .padding(.vertical, 8)
             .font(.caption2)
@@ -145,6 +147,11 @@ final class ModePickerController {
             createPanel()
         }
 
+        // Resize to fit the updated content (mode count may have changed)
+        if let hosting = hostingView {
+            panel?.setContentSize(hosting.fittingSize)
+        }
+
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         panel?.orderFrontRegardless()
@@ -178,7 +185,7 @@ final class ModePickerController {
                 callback?(mode)
             }
             return true
-        case .x, .lt:
+        case .b, .x, .lt:
             hide()
             return true
         default:

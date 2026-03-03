@@ -275,7 +275,23 @@ final class ControllerManager: ObservableObject {
             config: config
         )
 
-        helpOverlay.show(profileName: profileName, modeName: modeName, entries: entries)
+        helpOverlay.show(profileName: profileName, modeName: modeName, entries: entries) { [weak self] buttonName in
+            guard let self else { return }
+            // Re-resolve the action for the selected button and execute it
+            guard let profileResult = self.mappingResolver.resolveProfile(
+                bundleID: self.appObserver.frontmostBundleID,
+                config: self.configLoader.config
+            ) else { return }
+            let activeMode = self.profileModes[profileResult.name] ?? profileResult.profile.defaultMode
+            guard let buttonID = ButtonID(rawValue: buttonName) else { return }
+            guard let action = self.mappingResolver.resolve(
+                button: buttonID,
+                profile: profileResult.profile,
+                activeMode: activeMode,
+                config: self.configLoader.config
+            ) else { return }
+            self.executeAction(action, profile: profileResult.profile, profileName: profileResult.name, currentMode: activeMode)
+        }
     }
 
     private func executeAction(
