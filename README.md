@@ -19,7 +19,7 @@ PadIO is a macOS menu bar daemon that maps Xbox (or any MFi/HID) controller inpu
 PadIO reads its config from:
 
 ```
-~/.config/padcontrol/config.json
+~/.config/padio/config.json
 ```
 
 The file is **hot-reloaded** — save changes and they take effect immediately without restarting the app.

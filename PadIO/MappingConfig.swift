@@ -4,7 +4,7 @@
 //
 //  Created by Vincent Grégoire on 2026-03-02.
 //
-//  Codable types for ~/.config/padcontrol/config.json and the ConfigLoader.
+//  Codable types for ~/.config/padio/config.json and the ConfigLoader.
 
 import Foundation
 import Combine
@@ -136,7 +136,7 @@ final class ConfigLoader: ObservableObject {
 
     static let configPath: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/.config/padcontrol/config.json"
+        return "\(home)/.config/padio/config.json"
     }()
 
     private var fileMonitorSource: DispatchSourceFileSystemObject?
