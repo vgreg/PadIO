@@ -62,6 +62,23 @@ struct MappingConfig: Codable, Sendable {
         case menus
     }
 
+    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig]) {
+        self.triggerThreshold = triggerThreshold
+        self.debugOverlay = debugOverlay
+        self.global = global
+        self.profiles = profiles
+        self.menus = menus
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        triggerThreshold = try container.decodeIfPresent(Double.self, forKey: .triggerThreshold)
+        debugOverlay     = try container.decodeIfPresent(Bool.self, forKey: .debugOverlay)
+        global           = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
+        profiles         = try container.decode([String: ProfileConfig].self, forKey: .profiles)
+        menus            = try container.decodeIfPresent([String: MenuConfig].self, forKey: .menus) ?? [:]
+    }
+
     static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
 }
 
@@ -81,6 +98,14 @@ struct ProfileConfig: Codable, Sendable {
         case defaultMode = "default_mode"
         case global
         case modes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        apps        = try container.decodeIfPresent([String].self, forKey: .apps) ?? []
+        defaultMode = try container.decode(String.self, forKey: .defaultMode)
+        global      = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
+        modes       = try container.decodeIfPresent([String: ModeConfig].self, forKey: .modes) ?? [:]
     }
 }
 
