@@ -14,21 +14,24 @@ import Observation
 @Observable
 final class ModePickerViewModel {
     var modes: [String] = []
-    var selectedIndex: Int = 0
+    /// Index of the currently highlighted (navigated-to) row.
+    var highlightedIndex: Int = 0
+    /// The mode that is already active (shown with a checkmark).
+    var activeMode: String = ""
 
-    var selectedMode: String? {
-        guard !modes.isEmpty, modes.indices.contains(selectedIndex) else { return nil }
-        return modes[selectedIndex]
+    var highlightedMode: String? {
+        guard !modes.isEmpty, modes.indices.contains(highlightedIndex) else { return nil }
+        return modes[highlightedIndex]
     }
 
     func moveUp() {
         guard !modes.isEmpty else { return }
-        selectedIndex = (selectedIndex - 1 + modes.count) % modes.count
+        highlightedIndex = (highlightedIndex - 1 + modes.count) % modes.count
     }
 
     func moveDown() {
         guard !modes.isEmpty else { return }
-        selectedIndex = (selectedIndex + 1) % modes.count
+        highlightedIndex = (highlightedIndex + 1) % modes.count
     }
 }
 
@@ -53,17 +56,21 @@ struct ModePickerView: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(Array(viewModel.modes.enumerated()), id: \.offset) { index, mode in
-                            modeRow(mode: mode, isSelected: index == viewModel.selectedIndex)
-                                .id(index)
-                                .onTapGesture {
-                                    onConfirm(mode)
-                                }
+                            modeRow(
+                                mode: mode,
+                                isHighlighted: index == viewModel.highlightedIndex,
+                                isActive: mode == viewModel.activeMode
+                            )
+                            .id(index)
+                            .onTapGesture {
+                                onConfirm(mode)
+                            }
                         }
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 8)
                 }
-                .onChange(of: viewModel.selectedIndex) { _, newIndex in
+                .onChange(of: viewModel.highlightedIndex) { _, newIndex in
                     withAnimation(.easeInOut(duration: 0.1)) {
                         proxy.scrollTo(newIndex, anchor: .center)
                     }
@@ -95,23 +102,23 @@ struct ModePickerView: View {
     }
 
     @ViewBuilder
-    private func modeRow(mode: String, isSelected: Bool) -> some View {
+    private func modeRow(mode: String, isHighlighted: Bool, isActive: Bool) -> some View {
         HStack {
             Text(mode)
                 .font(.body)
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(isHighlighted ? .white : .primary)
             Spacer()
-            if isSelected {
+            if isActive {
                 Image(systemName: "checkmark")
                     .font(.caption.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isHighlighted ? .white : Color.accentColor)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? Color.accentColor : Color.clear)
+                .fill(isHighlighted ? Color.accentColor : Color.clear)
         )
         .contentShape(Rectangle())
     }
@@ -140,7 +147,8 @@ final class ModePickerController {
     func show(modes: [String], currentMode: String?, onSelect: @escaping (String) -> Void) {
         // Update view model
         viewModel.modes = modes
-        viewModel.selectedIndex = modes.firstIndex(of: currentMode ?? "") ?? 0
+        viewModel.activeMode = currentMode ?? ""
+        viewModel.highlightedIndex = modes.firstIndex(of: currentMode ?? "") ?? 0
         self.onSelect = onSelect
 
         if panel == nil {
@@ -179,7 +187,7 @@ final class ModePickerController {
             viewModel.moveDown()
             return true
         case .a, .rt:
-            if let mode = viewModel.selectedMode {
+            if let mode = viewModel.highlightedMode {
                 let callback = onSelect
                 hide()
                 callback?(mode)

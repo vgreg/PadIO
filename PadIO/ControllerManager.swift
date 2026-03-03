@@ -138,7 +138,6 @@ final class ControllerManager: ObservableObject {
 
             // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
             guard !helpOverlay.isVisible && !modePicker.isVisible else { continue }
-            guard accessibilityPermission.isGranted else { continue }
             pollAxes(gamepad: gamepad)
         }
     }
@@ -302,28 +301,15 @@ final class ControllerManager: ObservableObject {
     ) {
         switch action {
         case .keystroke(let keyCode, let flags):
-            guard accessibilityPermission.isGranted else {
-                print("[PadIO] Accessibility permission not granted — cannot emit keystrokes.")
-                return
-            }
             inputHandler.emitKeystroke(keyCode: keyCode, flags: flags)
 
         case .sequence(let steps, let delay):
-            guard accessibilityPermission.isGranted else {
-                print("[PadIO] Accessibility permission not granted — cannot emit keystrokes.")
-                return
-            }
             inputHandler.emitSequence(steps: steps, delay: delay)
 
         case .textInput(let text):
-            guard accessibilityPermission.isGranted else {
-                print("[PadIO] Accessibility permission not granted — cannot inject text.")
-                return
-            }
             inputHandler.emitText(text)
 
         case .mediaKey(let keyType):
-            // Media keys do not require Accessibility permission
             inputHandler.emitMediaKey(keyType: keyType)
 
         case .modeSelect:
@@ -337,17 +323,9 @@ final class ControllerManager: ObservableObject {
             }
 
         case .leftClick:
-            guard accessibilityPermission.isGranted else {
-                print("[PadIO] Accessibility permission not granted — cannot emit mouse clicks.")
-                return
-            }
             inputHandler.emitMouseClick(button: .left)
 
         case .rightClick:
-            guard accessibilityPermission.isGranted else {
-                print("[PadIO] Accessibility permission not granted — cannot emit mouse clicks.")
-                return
-            }
             inputHandler.emitMouseClick(button: .right)
         }
     }

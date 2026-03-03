@@ -24,15 +24,15 @@ final class AccessibilityPermission: ObservableObject {
     init() {
         isGranted = Self.check()
 
-        // Re-check whenever the app comes back to the foreground (e.g. after
-        // the user grants permission in System Settings and switches back).
+        // Re-check on any app switch — the user may have just granted permission
+        // in System Settings and switched to another app. PadIO itself is never
+        // frontmost during normal use, so filtering to our own bundle ID would
+        // mean the re-check never fires.
         observer = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { [weak self] notification in
-            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            guard app?.bundleIdentifier == Bundle.main.bundleIdentifier else { return }
+        ) { [weak self] _ in
             MainActor.assumeIsolated { self?.recheck() }
         }
     }
@@ -67,7 +67,7 @@ struct InputHandler {
     /// Emit a key-down then key-up event for the given virtual key code.
     /// `keyCode` uses Core Graphics virtual key codes (e.g. 0x31 = space).
     func emitKeystroke(keyCode: CGKeyCode, flags: CGEventFlags = []) {
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
             let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
@@ -110,7 +110,7 @@ struct InputHandler {
     func emitText(_ text: String) {
         guard !text.isEmpty else { return }
 
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         // Virtual key code 0 is used as a placeholder; the unicode string takes precedence.
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
@@ -170,7 +170,7 @@ struct InputHandler {
 
     /// Move the mouse cursor by the given pixel delta relative to its current position.
     func emitMouseMove(dx: CGFloat, dy: CGFloat) {
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         // Get current cursor position via a dummy move event
         let currentPos = CGEvent(source: nil)?.location ?? .zero
         let newPos = CGPoint(x: currentPos.x + dx, y: currentPos.y + dy)
@@ -196,7 +196,7 @@ struct InputHandler {
         let wheel1 = Int32(exactly: Int(dy.rounded())) ?? (dy > 0 ? Int32.max : Int32.min)
         let wheel2 = Int32(exactly: Int(dx.rounded())) ?? (dx > 0 ? Int32.max : Int32.min)
 
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         guard let event = CGEvent(
             scrollWheelEvent2Source: source,
             units: .pixel,
@@ -213,7 +213,7 @@ struct InputHandler {
 
     /// Emit a mouse button down + up at the current cursor position.
     func emitMouseClick(button: CGMouseButton) {
-        let source = CGEventSource(stateID: .hidSystemState)
+        let source = CGEventSource(stateID: .combinedSessionState)
         let pos = CGEvent(source: nil)?.location ?? .zero
         let downType: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
         let upType:   CGEventType = button == .left ? .leftMouseUp   : .rightMouseUp
