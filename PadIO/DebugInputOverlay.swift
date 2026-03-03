@@ -23,21 +23,21 @@ struct DebugInputView: View {
     let viewModel: DebugInputViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 9) {
             Text(viewModel.buttonName)
-                .font(.system(.body, design: .monospaced).bold())
+                .font(.system(size: 51, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
             Text(viewModel.actionDescription)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(size: 36, weight: .regular, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 42)
+        .padding(.vertical, 30)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(.separator, lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(.separator, lineWidth: 1.5)
         )
     }
 }
@@ -108,7 +108,7 @@ final class DebugInputController {
         let screenFrame = screen.visibleFrame
         let panelSize = panel.frame.size
         let x = screenFrame.midX - panelSize.width / 2
-        let y = screenFrame.minY + 40  // 40pt above the Dock/bottom edge
+        let y = screenFrame.minY + 120  // 120pt above the Dock/bottom edge
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

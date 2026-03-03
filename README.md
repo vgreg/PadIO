@@ -386,7 +386,12 @@ Set `"debug_overlay": false` (or omit the field) for production use.
 {
   "trigger_threshold": 0.5,
   "debug_overlay": false,
-  "global": {},
+  "global": {
+    "left_stick":  { "type": "mouse_move", "speed": 15 },
+    "right_stick": { "type": "scroll", "speed": 3, "y_inverted": true },
+    "L3":          { "type": "left_click" },
+    "R3":          { "type": "right_click" }
+  },
   "profiles": {
     "default": {
       "apps": [],

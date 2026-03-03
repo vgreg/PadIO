@@ -175,8 +175,10 @@ final class ControllerManager: ObservableObject {
             case .mouseMove:
                 // Screen Y axis is flipped: positive stick-Y = up = negative screen-Y
                 inputHandler.emitMouseMove(dx: dx, dy: -dy)
+                print("[PadIO] \(axisID.rawValue) | mouse_move dx=\(String(format: "%.1f", dx)) dy=\(String(format: "%.1f", -dy))")
             case .scroll:
                 inputHandler.emitScroll(dx: dx, dy: dy)
+                print("[PadIO] \(axisID.rawValue) | scroll dx=\(String(format: "%.1f", dx)) dy=\(String(format: "%.1f", dy))")
             }
         }
     }
