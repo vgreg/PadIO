@@ -49,12 +49,16 @@ final class AccessibilityPermission: ObservableObject {
     func request() {
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         _ = AXIsProcessTrustedWithOptions(options)
+        _ = CGRequestPostEventAccess()
         recheck()
     }
 
     private static func check() -> Bool {
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): false]
-        return AXIsProcessTrustedWithOptions(options)
+        let axTrusted = AXIsProcessTrustedWithOptions(options)
+        let postAccess = CGPreflightPostEventAccess()
+        print("[PadIO] Permission check — AXTrusted=\(axTrusted) postEventAccess=\(postAccess)")
+        return axTrusted
     }
 }
 
@@ -67,6 +71,7 @@ struct InputHandler {
     /// Emit a key-down then key-up event for the given virtual key code.
     /// `keyCode` uses Core Graphics virtual key codes (e.g. 0x31 = space).
     func emitKeystroke(keyCode: CGKeyCode, flags: CGEventFlags = []) {
+        let trusted = CGPreflightPostEventAccess()
         let source = CGEventSource(stateID: .combinedSessionState)
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
@@ -82,7 +87,7 @@ struct InputHandler {
         keyDown.post(tap: .cgSessionEventTap)
         keyUp.post(tap: .cgSessionEventTap)
 
-        print("[PadIO] Emitted keystroke: keyCode=0x\(String(keyCode, radix: 16)) flags=\(flags.rawValue)")
+        print("[PadIO] Emitted keystroke: keyCode=0x\(String(keyCode, radix: 16)) flags=\(flags.rawValue) (postEventAccess=\(trusted))")
     }
 
     // MARK: - Key sequence
