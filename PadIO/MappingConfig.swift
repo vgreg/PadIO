@@ -11,6 +11,34 @@ import Combine
 
 // MARK: - Config types
 
+/// A single item in a custom menu.
+struct MenuItemConfig: Codable, Sendable {
+    /// Display label shown in the menu row.
+    let label: String
+    /// Action to execute when this item is selected.
+    let action: ActionConfig
+}
+
+/// A named custom menu — an ordered list of label/action pairs.
+/// Stored as a JSON array for clean config authoring.
+struct MenuConfig: Codable, Sendable {
+    let items: [MenuItemConfig]
+
+    init(items: [MenuItemConfig]) {
+        self.items = items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        items = try container.decode([MenuItemConfig].self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(items)
+    }
+}
+
 /// Top-level config file structure.
 struct MappingConfig: Codable, Sendable {
     /// Default trigger axis threshold (0–1). Defaults to 0.5 if omitted.
@@ -22,15 +50,19 @@ struct MappingConfig: Codable, Sendable {
     var global: [String: ActionConfig]
     /// Named profiles, keyed by profile name (e.g. "default", "terminal").
     var profiles: [String: ProfileConfig]
+    /// Named custom menus, keyed by menu name (e.g. "git", "window").
+    /// Opened via the "menu:<name>" action type.
+    var menus: [String: MenuConfig]
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
         case debugOverlay = "debug_overlay"
         case global
         case profiles
+        case menus
     }
 
-    static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:])
+    static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
 }
 
 /// A profile matches a set of apps by bundle ID and provides per-mode button mappings.

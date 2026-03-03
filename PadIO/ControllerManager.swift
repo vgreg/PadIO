@@ -28,6 +28,7 @@ final class ControllerManager: ObservableObject {
     private let debugOverlay        = DebugInputController()
     private let helpOverlay         = HelpController()
     private let modeNotification    = ModeNotificationController()
+    private let customMenu          = CustomMenuController()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -138,7 +139,7 @@ final class ControllerManager: ObservableObject {
             previousButtonStates[id] = prev
 
             // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
-            guard !helpOverlay.isVisible && !modePicker.isVisible else { continue }
+            guard !helpOverlay.isVisible && !modePicker.isVisible && !customMenu.isVisible else { continue }
             pollAxes(gamepad: gamepad, heldButtons: prev)
         }
     }
@@ -216,6 +217,11 @@ final class ControllerManager: ObservableObject {
 
         // Let the mode picker consume the input first when it is visible
         if modePicker.handleButton(buttonID) {
+            return
+        }
+
+        // Let a custom menu consume input when it is visible
+        if customMenu.handleButton(buttonID) {
             return
         }
 
@@ -351,6 +357,21 @@ final class ControllerManager: ObservableObject {
                 return
             }
             switchMode(name, profileName: profileName)
+
+        case .openMenu(let name):
+            let config = configLoader.config
+            guard let menuConfig = config.menus[name] else {
+                print("[PadIO] openMenu: unknown menu '\(name)'")
+                return
+            }
+            let labels = menuConfig.items.map { $0.label }
+            customMenu.show(title: name, labels: labels) { [weak self] index in
+                guard let self else { return }
+                guard menuConfig.items.indices.contains(index) else { return }
+                let itemAction = menuConfig.items[index].action
+                guard let action = MappingResolver().buildActionPublic(from: itemAction) else { return }
+                self.executeAction(action, profile: profile, profileName: profileName, currentMode: currentMode)
+            }
 
         case .leftClick:
             inputHandler.emitMouseClick(button: .left)

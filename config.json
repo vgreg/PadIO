@@ -40,7 +40,7 @@
           "A":          { "type": "keystroke", "key": "return" },
           "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
           "X":          { "type": "keystroke", "key": "l", "modifiers": ["ctrl"] },
-          "Y":          { "type": "keystroke", "key": "z", "modifiers": ["ctrl"] },
+          "Y":          { "type": "menu:git" },
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
@@ -96,5 +96,16 @@
         }
       }
     }
+  },
+  "menus": {
+    "git": [
+      { "label": "git status",  "action": { "type": "keystroke", "key": "`git status\n`" } },
+      { "label": "git diff",    "action": { "type": "keystroke", "key": "`git diff\n`" } },
+      { "label": "git log",     "action": { "type": "keystroke", "key": "`git log --oneline -20\n`" } },
+      { "label": "git pull",    "action": { "type": "keystroke", "key": "`git pull\n`" } },
+      { "label": "git push",    "action": { "type": "keystroke", "key": "`git push\n`" } },
+      { "label": "git stash",   "action": { "type": "keystroke", "key": "`git stash\n`" } },
+      { "label": "git stash pop", "action": { "type": "keystroke", "key": "`git stash pop\n`" } }
+    ]
   }
 }

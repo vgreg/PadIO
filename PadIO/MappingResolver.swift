@@ -29,6 +29,8 @@ enum Action: Sendable {
     case nextMode
     /// Switch directly to the named mode.
     case setMode(name: String)
+    /// Open a named custom menu overlay.
+    case openMenu(name: String)
     /// Emit a left mouse button click at the current cursor position.
     case leftClick
     /// Emit a right mouse button click at the current cursor position.
@@ -210,6 +212,10 @@ struct MappingResolver {
 
     // MARK: - Action building
 
+    func buildActionPublic(from config: ActionConfig) -> Action? {
+        buildAction(from: config)
+    }
+
     private func buildAction(from config: ActionConfig) -> Action? {
         switch config.type {
         case "keystroke":
@@ -273,6 +279,14 @@ struct MappingResolver {
             }
             return .setMode(name: name)
 
+        case _ where config.type.hasPrefix("menu:"):
+            let name = String(config.type.dropFirst("menu:".count))
+            guard !name.isEmpty else {
+                print("[PadIO] menu: action missing menu name")
+                return nil
+            }
+            return .openMenu(name: name)
+
         case "left_click":
             return .leftClick
 
@@ -320,6 +334,9 @@ struct MappingResolver {
 
         case .setMode(let name):
             return "mode:\(name)"
+
+        case .openMenu(let name):
+            return "menu:\(name)"
 
         case .leftClick:
             return "left_click"
