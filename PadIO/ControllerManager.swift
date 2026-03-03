@@ -33,11 +33,16 @@ final class ControllerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
+        // Allow receiving controller input even when this app is not frontmost.
+        // Without this, macOS routes input state exclusively to the frontmost app.
+        GCController.shouldMonitorBackgroundEvents = true
+
         setupNotifications()
         GCController.startWirelessControllerDiscovery()
         for controller in GCController.controllers() {
             connectController(controller)
         }
+        startPollingTimer()
 
         // Re-resolve profile when the frontmost app changes
         appObserver.$frontmostBundleID
@@ -62,8 +67,6 @@ final class ControllerManager: ObservableObject {
             return
         }
 
-        // Update profile name; mode will be resolved lazily on next button press
-        // (avoids calling CGWindowListCopyWindowInfo on the main thread here)
         if name != activeProfileName {
             activeProfileName = name
             activeModeName = profile.defaultMode
@@ -78,7 +81,7 @@ final class ControllerManager: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] notification in
             guard let controller = notification.object as? GCController else { return }
-            Task { @MainActor [weak self] in self?.connectController(controller) }
+            MainActor.assumeIsolated { self?.connectController(controller) }
         }
 
         NotificationCenter.default.addObserver(
@@ -86,7 +89,7 @@ final class ControllerManager: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] notification in
             guard let controller = notification.object as? GCController else { return }
-            Task { @MainActor [weak self] in self?.disconnectController(controller) }
+            MainActor.assumeIsolated { self?.disconnectController(controller) }
         }
     }
 
@@ -94,70 +97,46 @@ final class ControllerManager: ObservableObject {
         guard !connectedControllers.contains(controller) else { return }
         connectedControllers.append(controller)
         print("[PadIO] Controller connected: \(controller.vendorName ?? "Unknown")")
-        setupInputHandlers(for: controller)
     }
 
     private func disconnectController(_ controller: GCController) {
         connectedControllers.removeAll { $0 == controller }
+        previousButtonStates.removeValue(forKey: ObjectIdentifier(controller))
         print("[PadIO] Controller disconnected: \(controller.vendorName ?? "Unknown")")
     }
 
-    // MARK: - Input handler registration
+    // MARK: - Polling
 
-    private func setupInputHandlers(for controller: GCController) {
-        guard let gamepad = controller.extendedGamepad else {
-            print("[PadIO] No extendedGamepad profile, skipping input setup.")
-            return
+    // Previous pressed state per controller, keyed by ObjectIdentifier
+    private var previousButtonStates: [ObjectIdentifier: [ButtonID: Bool]] = [:]
+
+    private func startPollingTimer() {
+        // Poll at ~60Hz — fast enough to catch quick taps
+        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollControllers() }
         }
+    }
 
-        // All standard elements
-        gamepad.valueChangedHandler = { [weak self] (profile: GCExtendedGamepad, element: GCControllerElement) in
-            Task { @MainActor [weak self] in
-                self?.handleElement(element, gamepad: profile, controller: controller)
-            }
-        }
+    private func pollControllers() {
+        let threshold = Float(configLoader.config.triggerThreshold ?? 0.5)
+        for controller in GCController.controllers() {
+            guard let gamepad = controller.extendedGamepad else { continue }
+            let id = ObjectIdentifier(controller)
+            var prev = previousButtonStates[id] ?? [:]
 
-        // Xbox-specific buttons (share, paddles) are on a separate profile
-        if let xbox = controller.physicalInputProfile as? GCXboxGamepad {
-            let xboxHandler = { [weak self] (btn: GCControllerButtonInput, _: Float, pressed: Bool) in
-                guard pressed else { return }
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if let id = ButtonIdentifier.identifyXbox(element: btn, xbox: xbox) {
-                        self.handleMappedButton(id)
-                    }
+            for buttonID in ButtonID.allCases {
+                let pressed = isPressed(buttonID: buttonID, gamepad: gamepad, threshold: threshold)
+                let wasPressed = prev[buttonID] ?? false
+                if pressed && !wasPressed {
+                    handleMappedButton(buttonID)
                 }
+                prev[buttonID] = pressed
             }
-            xbox.buttonShare?.valueChangedHandler   = xboxHandler
-            xbox.paddleButton1?.valueChangedHandler = xboxHandler
-            xbox.paddleButton2?.valueChangedHandler = xboxHandler
-            xbox.paddleButton3?.valueChangedHandler = xboxHandler
-            xbox.paddleButton4?.valueChangedHandler = xboxHandler
+            previousButtonStates[id] = prev
         }
     }
 
     // MARK: - Input dispatch
-
-    private func handleElement(_ element: GCControllerElement, gamepad: GCExtendedGamepad, controller: GCController) {
-        guard let buttonID = ButtonIdentifier.identify(element: element, gamepad: gamepad) else {
-            return // analog axis or unrecognized element
-        }
-
-        let threshold = Float(configLoader.config.triggerThreshold ?? 0.5)
-
-        // For triggers: only fire when crossing the threshold (press, not release)
-        switch buttonID {
-        case .lt:
-            guard gamepad.leftTrigger.value >= threshold else { return }
-        case .rt:
-            guard gamepad.rightTrigger.value >= threshold else { return }
-        default:
-            // For all other buttons: only fire on press, not release
-            guard isPressed(buttonID: buttonID, gamepad: gamepad) else { return }
-        }
-
-        handleMappedButton(buttonID)
-    }
 
     private func handleMappedButton(_ buttonID: ButtonID) {
         // Let the mode picker consume the input first when it is visible
@@ -229,7 +208,7 @@ final class ControllerManager: ObservableObject {
 
     // MARK: - Press detection
 
-    private func isPressed(buttonID: ButtonID, gamepad: GCExtendedGamepad) -> Bool {
+    private func isPressed(buttonID: ButtonID, gamepad: GCExtendedGamepad, threshold: Float = 0.5) -> Bool {
         switch buttonID {
         case .a:         return gamepad.buttonA.isPressed
         case .b:         return gamepad.buttonB.isPressed
@@ -237,6 +216,8 @@ final class ControllerManager: ObservableObject {
         case .y:         return gamepad.buttonY.isPressed
         case .lb:        return gamepad.leftShoulder.isPressed
         case .rb:        return gamepad.rightShoulder.isPressed
+        case .lt:        return gamepad.leftTrigger.value >= threshold
+        case .rt:        return gamepad.rightTrigger.value >= threshold
         case .dpadUp:    return gamepad.dpad.up.isPressed
         case .dpadDown:  return gamepad.dpad.down.isPressed
         case .dpadLeft:  return gamepad.dpad.left.isPressed
@@ -245,7 +226,7 @@ final class ControllerManager: ObservableObject {
         case .r3:        return gamepad.rightThumbstickButton?.isPressed == true
         case .menu:      return gamepad.buttonMenu.isPressed
         case .options:   return gamepad.buttonOptions?.isPressed == true
-        default:         return true
+        default:         return false
         }
     }
 }
