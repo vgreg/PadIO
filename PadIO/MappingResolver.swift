@@ -39,6 +39,8 @@ enum Action: Sendable {
     case keyboardViewer
     /// Cycle to the next enabled keyboard input source (language/layout).
     case nextInputSource
+    /// Fire a haptic rumble on all connected controllers.
+    case rumble(intensity: Double, sharpness: Double, duration: Double)
 }
 
 // MARK: - Axis mapping
@@ -303,6 +305,12 @@ struct MappingResolver {
         case "next_input_source":
             return .nextInputSource
 
+        case "rumble":
+            let intensity = config.intensity ?? 0.5
+            let sharpness = config.sharpness ?? 0.3
+            let duration  = config.delay     ?? 0.2  // "delay" doubles as duration for rumble
+            return .rumble(intensity: intensity, sharpness: sharpness, duration: duration)
+
         case "mouse_move", "scroll":
             // Axis-only types; not dispatched as one-shot Actions from the button pipeline.
             return nil
@@ -359,6 +367,9 @@ struct MappingResolver {
 
         case .nextInputSource:
             return "next_input_source"
+
+        case .rumble(let intensity, _, let duration):
+            return "rumble i=\(String(format: "%.1f", intensity)) t=\(String(format: "%.2f", duration))s"
         }
     }
 

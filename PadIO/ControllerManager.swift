@@ -29,6 +29,8 @@ final class ControllerManager: ObservableObject {
     private let helpOverlay         = HelpController()
     private let modeNotification    = ModeNotificationController()
     private let customMenu          = CustomMenuController()
+    private let hapticController    = HapticController()
+    private lazy var hapticObserver = HapticEventObserver(hapticController: hapticController)
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -49,9 +51,15 @@ final class ControllerManager: ObservableObject {
             .sink { [weak self] _ in self?.refreshActiveProfile() }
             .store(in: &cancellables)
 
-        // Re-resolve profile when config reloads
+        // Re-resolve profile and reconfigure haptics when config reloads
         configLoader.$config
-            .sink { [weak self] _ in self?.refreshActiveProfile() }
+            .sink { [weak self] config in
+                self?.refreshActiveProfile()
+                self?.hapticObserver.configure(
+                    config: config,
+                    frontmostBundleID: self?.appObserver.frontmostBundleID
+                )
+            }
             .store(in: &cancellables)
     }
 
@@ -102,6 +110,7 @@ final class ControllerManager: ObservableObject {
     private func disconnectController(_ controller: GCController) {
         connectedControllers.removeAll { $0 == controller }
         previousButtonStates.removeValue(forKey: ObjectIdentifier(controller))
+        hapticController.controllerDisconnected(controller)
         print("[PadIO] Controller disconnected: \(controller.vendorName ?? "Unknown")")
     }
 
@@ -384,6 +393,14 @@ final class ControllerManager: ObservableObject {
 
         case .nextInputSource:
             inputHandler.cycleToNextInputSource()
+
+        case .rumble(let intensity, let sharpness, let duration):
+            let params = RumbleParams(
+                intensity: Float(intensity),
+                sharpness: Float(sharpness),
+                duration: duration
+            )
+            hapticController.rumbleAll(params: params)
         }
     }
 

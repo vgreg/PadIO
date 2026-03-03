@@ -1,12 +1,12 @@
 # PadIO
 
-PadIO is a macOS menu bar daemon that maps Xbox (or any MFi/HID) controller inputs to synthetic keyboard events. It runs in the background with no window, reads a JSON config file, and fires keystrokes to whatever app is in the foreground — even when PadIO itself is not.
+PadIO is a macOS menu bar daemon that maps game controller inputs to synthetic keyboard events, mouse movement, and more. It runs in the background with no window, reads a JSON config file, and fires keystrokes to whatever app is in the foreground — even when PadIO itself is not. Works with Xbox, PlayStation (DualShock 4, DualSense), Nintendo Switch Pro, and any MFi controller recognized by macOS.
 
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
 - **Accessibility permission** — required to post synthetic keyboard events
-- An Xbox Wireless Controller (or any controller recognized by the GameController framework)
+- A game controller recognized by macOS (Xbox, PlayStation, Nintendo Switch Pro, or any MFi controller)
 
 ## Installation
 
@@ -49,6 +49,7 @@ If the file does not exist, PadIO runs with no bindings (controller input is sil
 | `global`            | object  | `{}`    | Button bindings applied to all profiles. These take priority over everything else. |
 | `profiles`          | object  | `{}`    | Named profiles, each applying to a set of apps. |
 | `menus`             | object  | `{}`    | Named custom menus (see [Custom Menus](#custom-menus)). |
+| `haptics`           | object  | omitted | Optional haptic/rumble triggers for system events (see [Haptics](#haptics)). |
 
 ### Profiles
 
@@ -210,6 +211,23 @@ Emit a left or right mouse click at the current cursor position. Requires Access
 ```
 
 Useful bound to thumbstick clicks (`L3`, `R3`) alongside axis-mapped stick movement.
+
+### `rumble`
+
+Fire a one-shot haptic rumble on all connected controllers. Has no effect on controllers that don't support haptics (no error is raised).
+
+```json
+{ "type": "rumble" }
+{ "type": "rumble", "intensity": 0.8, "delay": 0.3, "sharpness": 0.5 }
+```
+
+| Field       | Type   | Default | Description |
+|-------------|--------|---------|-------------|
+| `intensity` | number | `0.5`   | Motor strength (0.0–1.0). |
+| `sharpness` | number | `0.3`   | Haptic sharpness (0.0–1.0). Higher = crisper, lower = softer buzz. |
+| `delay`     | number | `0.2`   | Duration of the rumble in seconds. |
+
+Does not require Accessibility permission.
 
 ### `mouse_move`
 
@@ -596,3 +614,95 @@ The following action types do **not** require Accessibility permission and work 
 - Media key events (`play_pause`, `next_track`, `volume_up`, etc.)
 - `keyboard_viewer`
 - `next_input_source`
+- `rumble` (haptic feedback — routes directly to the controller hardware)
+
+---
+
+## Haptics
+
+PadIO can rumble connected controllers in response to system events. All haptic configuration is optional and opt-in — omit the `haptics` key entirely to disable all system-event rumble.
+
+```json
+"haptics": {
+  "on_system_beep": {
+    "intensity": 0.5,
+    "sharpness": 0.3,
+    "duration": 0.2
+  },
+  "on_notification": {
+    "intensity": 0.6,
+    "sharpness": 0.4,
+    "duration": 0.25,
+    "apps": ["com.apple.MobileSMS", "com.tinyspeck.slackmacgap"]
+  }
+}
+```
+
+### `on_system_beep`
+
+Rumble whenever macOS plays a system alert sound (the error "beep"). Fires on all connected controllers.
+
+| Field       | Type   | Default | Description |
+|-------------|--------|---------|-------------|
+| `intensity` | number | `0.5`   | Motor strength (0.0–1.0). |
+| `sharpness` | number | `0.3`   | Haptic sharpness (0.0–1.0). |
+| `duration`  | number | `0.2`   | Rumble duration in seconds. |
+
+### `on_notification`
+
+Rumble when a user notification is delivered by any app (or a filtered list of apps).
+
+| Field       | Type            | Default | Description |
+|-------------|-----------------|---------|-------------|
+| `intensity` | number          | `0.6`   | Motor strength (0.0–1.0). |
+| `sharpness` | number          | `0.4`   | Haptic sharpness (0.0–1.0). |
+| `duration`  | number          | `0.25`  | Rumble duration in seconds. |
+| `apps`      | array of strings | all apps | If set, only rumble when the notification comes from one of these bundle IDs. Omit or leave empty to rumble for all apps. |
+
+### `rumble` action type
+
+You can also trigger a rumble directly from any button binding using the [`rumble`](#rumble) action type, independently of the system-event triggers above.
+
+---
+
+## Controller Compatibility
+
+PadIO uses Apple's **GameController framework**, which abstracts all connected controllers behind a unified `GCExtendedGamepad` interface. Any controller macOS recognizes will work.
+
+### Button name mapping by controller
+
+| PadIO name | Xbox              | PlayStation       | Nintendo Switch Pro |
+|------------|-------------------|-------------------|---------------------|
+| `A`        | A                 | Cross (✕)         | B                   |
+| `B`        | B                 | Circle (○)        | A                   |
+| `X`        | X                 | Square (□)        | Y                   |
+| `Y`        | Y                 | Triangle (△)      | X                   |
+| `LB`       | Left Bumper       | L1                | L                   |
+| `RB`       | Right Bumper      | R1                | R                   |
+| `LT`       | Left Trigger      | L2                | ZL                  |
+| `RT`       | Right Trigger     | R2                | ZR                  |
+| `L3`       | Left Stick click  | L3                | Left Stick click    |
+| `R3`       | Right Stick click | R3                | Right Stick click   |
+| `options`  | View / Back       | Create            | −                   |
+| `menu`     | Menu (≡)          | Options           | +                   |
+
+> **Note:** The `menu` button is reserved for the Help HUD and cannot be rebound.
+
+### Pairing controllers with macOS
+
+- **Xbox**: Bluetooth pairing via System Settings → Bluetooth. USB also works.
+- **DualShock 4 / DualSense**: Native support on macOS 12+. Hold PS + Share (DS4) or PS + Create (DualSense) to enter pairing mode, then pair via System Settings → Bluetooth.
+- **Nintendo Switch Pro**: Pair via System Settings → Bluetooth (hold the sync button on top of the controller).
+
+### Haptic feedback (rumble) support
+
+Haptic feedback requires macOS 11+ and a controller with rumble motors. Confirmed working:
+
+| Controller       | Handles | Triggers |
+|------------------|---------|----------|
+| Xbox Wireless    | ✓       | ✓        |
+| DualSense (PS5)  | ✓       | ✓ (adaptive) |
+| DualShock 4 (PS4) | ✓      | —        |
+| Nintendo Switch Pro | —    | —        |
+
+See [`rumble`](#rumble) action type for configuration.

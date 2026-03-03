@@ -39,6 +39,44 @@ struct MenuConfig: Codable, Sendable {
     }
 }
 
+// MARK: - Haptics config
+
+/// Top-level haptics configuration — all haptic behaviours are opt-in.
+struct HapticsConfig: Codable, Sendable {
+    /// Rumble on system alert sounds (the macOS "beep").
+    let onSystemBeep: RumbleEventConfig?
+    /// Rumble when a user notification is delivered.
+    let onNotification: NotificationRumbleConfig?
+
+    enum CodingKeys: String, CodingKey {
+        case onSystemBeep     = "on_system_beep"
+        case onNotification   = "on_notification"
+    }
+
+    /// Parameters for a single rumble event.
+    struct RumbleEventConfig: Codable, Sendable {
+        /// Motor intensity (0.0–1.0). Default 0.5.
+        let intensity: Double?
+        /// Haptic sharpness (0.0–1.0). Default 0.3.
+        let sharpness: Double?
+        /// Duration in seconds. Default 0.2.
+        let duration: Double?
+    }
+
+    /// Rumble triggered by notification delivery, with optional app filter.
+    struct NotificationRumbleConfig: Codable, Sendable {
+        /// Motor intensity (0.0–1.0). Default 0.6.
+        let intensity: Double?
+        /// Haptic sharpness (0.0–1.0). Default 0.4.
+        let sharpness: Double?
+        /// Duration in seconds. Default 0.25.
+        let duration: Double?
+        /// If set, only rumble when the notification comes from one of these bundle IDs.
+        /// If omitted or empty, rumble for all notifications.
+        let apps: [String]?
+    }
+}
+
 /// Top-level config file structure.
 struct MappingConfig: Codable, Sendable {
     /// Default trigger axis threshold (0–1). Defaults to 0.5 if omitted.
@@ -53,6 +91,8 @@ struct MappingConfig: Codable, Sendable {
     /// Named custom menus, keyed by menu name (e.g. "git", "window").
     /// Opened via the "menu:<name>" action type.
     var menus: [String: MenuConfig]
+    /// Optional haptic/rumble configuration for system event triggers.
+    var haptics: HapticsConfig?
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
@@ -60,14 +100,16 @@ struct MappingConfig: Codable, Sendable {
         case global
         case profiles
         case menus
+        case haptics
     }
 
-    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig]) {
+    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil) {
         self.triggerThreshold = triggerThreshold
         self.debugOverlay = debugOverlay
         self.global = global
         self.profiles = profiles
         self.menus = menus
+        self.haptics = haptics
     }
 
     init(from decoder: Decoder) throws {
@@ -77,6 +119,7 @@ struct MappingConfig: Codable, Sendable {
         global           = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
         profiles         = try container.decode([String: ProfileConfig].self, forKey: .profiles)
         menus            = try container.decodeIfPresent([String: MenuConfig].self, forKey: .menus) ?? [:]
+        haptics          = try container.decodeIfPresent(HapticsConfig.self, forKey: .haptics)
     }
 
     static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
@@ -160,6 +203,11 @@ final class ActionConfig: Codable, Sendable {
     let trigger: ActionConfig?
     /// Reserved for future dual-use: mode name to hold while button is held.
     let hold: String?
+    /// For "rumble": motor intensity (0.0–1.0). Default 0.5.
+    let intensity: Double?
+    /// For "rumble": haptic sharpness (0.0–1.0). Default 0.3.
+    let sharpness: Double?
+    // Note: `duration` is shared with "sequence" (delay between steps) and "rumble" (rumble length in seconds).
 
     enum CodingKeys: String, CodingKey {
         case type, key, modifiers, steps, delay
@@ -171,9 +219,10 @@ final class ActionConfig: Codable, Sendable {
         case modifier
         case modifierSpeed = "modifier_speed"
         case trigger, hold
+        case intensity, sharpness
     }
 
-    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, modifier: String? = nil, modifierSpeed: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
+    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, modifier: String? = nil, modifierSpeed: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil, intensity: Double? = nil, sharpness: Double? = nil) {
         self.type = type
         self.key = key
         self.modifiers = modifiers
@@ -188,6 +237,8 @@ final class ActionConfig: Codable, Sendable {
         self.modifierSpeed = modifierSpeed
         self.trigger = trigger
         self.hold = hold
+        self.intensity = intensity
+        self.sharpness = sharpness
     }
 }
 
