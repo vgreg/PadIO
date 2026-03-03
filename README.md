@@ -37,7 +37,8 @@ If the file does not exist, PadIO runs with no bindings (controller input is sil
   "trigger_threshold": 0.5,
   "debug_overlay": false,
   "global": { },
-  "profiles": { }
+  "profiles": { },
+  "menus": { }
 }
 ```
 
@@ -47,6 +48,7 @@ If the file does not exist, PadIO runs with no bindings (controller input is sil
 | `debug_overlay`     | boolean | `false` | Show a floating HUD on every button press displaying the button name and resolved action. Set to `true` during development. |
 | `global`            | object  | `{}`    | Button bindings applied to all profiles. These take priority over everything else. |
 | `profiles`          | object  | `{}`    | Named profiles, each applying to a set of apps. |
+| `menus`             | object  | `{}`    | Named custom menus (see [Custom Menus](#custom-menus)). |
 
 ### Profiles
 
@@ -154,6 +156,50 @@ Opens the mode picker overlay. Navigate with dpad up/down, confirm with A or RT,
 
 Typically bound to the `options` button in a profile's `global` section.
 
+### `prev_mode` / `next_mode`
+
+Instantly switch to the previous or next mode in the sorted mode list (wraps around). A brief notification HUD shows the new mode name. No overlay is shown.
+
+```json
+{ "type": "prev_mode" }
+{ "type": "next_mode" }
+```
+
+Useful bound to `LB`/`RB` in a profile's `global` section for quick cycling without opening the picker.
+
+### `mode:<name>`
+
+Switch directly to a named mode without opening the picker. The mode must exist in the current profile.
+
+```json
+{ "type": "mode:shell" }
+{ "type": "mode:nvim" }
+```
+
+### `menu:<name>`
+
+Open a named custom menu overlay (defined in the top-level `menus` object). See [Custom Menus](#custom-menus).
+
+```json
+{ "type": "menu:git" }
+```
+
+### `keyboard_viewer`
+
+Toggle the macOS Keyboard Viewer floating palette on or off. Does not require Accessibility permission.
+
+```json
+{ "type": "keyboard_viewer" }
+```
+
+### `next_input_source`
+
+Cycle to the next enabled keyboard input source (language or layout). Wraps around the full list of enabled sources. Does not require Accessibility permission.
+
+```json
+{ "type": "next_input_source" }
+```
+
 ### `left_click` / `right_click`
 
 Emit a left or right mouse click at the current cursor position. Requires Accessibility permission.
@@ -181,19 +227,25 @@ Map a joystick or dpad to continuous mouse cursor movement. Used as a **mode bin
   "type": "mouse_move",
   "x_speed": 20,
   "y_speed": 12,
-  "y_inverted": true
+  "y_inverted": true,
+  "modifier": "RB",
+  "modifier_speed": 3
 }
 ```
 
-| Field        | Type    | Default | Description |
-|--------------|---------|---------|-------------|
-| `speed`      | number  | `15`    | Base speed multiplier applied to both axes. |
-| `x_speed`    | number  | `speed` | Speed multiplier for the X axis (overrides `speed`). |
-| `y_speed`    | number  | `speed` | Speed multiplier for the Y axis (overrides `speed`). |
-| `x_inverted` | boolean | `false` | Invert the horizontal axis. |
-| `y_inverted` | boolean | `false` | Invert the vertical axis. |
+| Field            | Type    | Default | Description |
+|------------------|---------|---------|-------------|
+| `speed`          | number  | `15`    | Base speed multiplier applied to both axes. |
+| `x_speed`        | number  | `speed` | Speed multiplier for the X axis (overrides `speed`). |
+| `y_speed`        | number  | `speed` | Speed multiplier for the Y axis (overrides `speed`). |
+| `x_inverted`     | boolean | `false` | Invert the horizontal axis. |
+| `y_inverted`     | boolean | `false` | Invert the vertical axis. |
+| `modifier`       | string  | —       | Button name (e.g. `"RB"`) that, when held, applies `modifier_speed` instead of the base speed. |
+| `modifier_speed` | number  | `2.0`   | Speed multiplier used when the `modifier` button is held. |
 
 Axis events are emitted every tick (~60Hz) while the stick is deflected beyond the deadzone (0.1). The cursor movement per tick is `axis_value × speed`.
+
+The `modifier` button acts as a precision/turbo toggle: hold it to switch between the base speed and `modifier_speed`. For example, set `"modifier": "RB", "modifier_speed": 3` to boost speed while holding RB, or use a value below `1.0` for a slow/precision mode.
 
 ### `scroll`
 
@@ -207,13 +259,15 @@ Map a joystick or dpad to continuous scroll wheel events. Same parameters as `mo
 }
 ```
 
-| Field        | Type    | Default | Description |
-|--------------|---------|---------|-------------|
-| `speed`      | number  | `3`     | Base scroll speed multiplier applied to both axes. |
-| `x_speed`    | number  | `speed` | Speed multiplier for horizontal scroll (overrides `speed`). |
-| `y_speed`    | number  | `speed` | Speed multiplier for vertical scroll (overrides `speed`). |
-| `x_inverted` | boolean | `false` | Invert horizontal scroll direction. |
-| `y_inverted` | boolean | `false` | Invert vertical scroll direction. |
+| Field            | Type    | Default | Description |
+|------------------|---------|---------|-------------|
+| `speed`          | number  | `3`     | Base scroll speed multiplier applied to both axes. |
+| `x_speed`        | number  | `speed` | Speed multiplier for horizontal scroll (overrides `speed`). |
+| `y_speed`        | number  | `speed` | Speed multiplier for vertical scroll (overrides `speed`). |
+| `x_inverted`     | boolean | `false` | Invert horizontal scroll direction. |
+| `y_inverted`     | boolean | `false` | Invert vertical scroll direction. |
+| `modifier`       | string  | —       | Button name that, when held, applies `modifier_speed` instead of the base speed. |
+| `modifier_speed` | number  | `2.0`   | Speed multiplier used when the `modifier` button is held. |
 
 ---
 
@@ -357,6 +411,35 @@ These use the system media key path (no Accessibility permission required).
 
 ---
 
+## Custom Menus
+
+Named menus are defined at the top level of the config under `"menus"`. Each menu is an array of `{ label, action }` pairs and is opened via the `menu:<name>` action type.
+
+```json
+"menus": {
+  "git": [
+    { "label": "git status",  "action": { "type": "keystroke", "key": "`git status\n`" } },
+    { "label": "git diff",    "action": { "type": "keystroke", "key": "`git diff\n`" } },
+    { "label": "git push",    "action": { "type": "keystroke", "key": "`git push\n`" } }
+  ]
+}
+```
+
+Open it from any binding:
+
+```json
+"Y": { "type": "menu:git" }
+```
+
+**Navigation:**
+- **dpad up/down** — move highlight
+- **A** or **RT** — select item and execute its action
+- **B**, **X**, or **LT** — cancel and close
+
+Menu item actions can be any action type, including another `menu:<name>` for nested menus.
+
+---
+
 ## HUDs
 
 ### Help HUD (menu button)
@@ -367,6 +450,10 @@ Press the **menu (≡)** button at any time to open a floating overlay showing a
 - Close with **B**, **X**, or **LT** (or press **menu** again)
 
 The Help HUD takes priority over all other button processing while visible.
+
+### Mode Notification
+
+When a mode switch occurs via `prev_mode`, `next_mode`, or `mode:<name>`, a small overlay briefly appears at the top of the screen displaying the new mode name. It auto-dismisses after 1.5 seconds.
 
 ### Debug Overlay
 
@@ -387,7 +474,7 @@ Set `"debug_overlay": false` (or omit the field) for production use.
   "trigger_threshold": 0.5,
   "debug_overlay": false,
   "global": {
-    "left_stick":  { "type": "mouse_move", "speed": 15 },
+    "left_stick":  { "type": "mouse_move", "speed": 15, "modifier": "RB", "modifier_speed": 3 },
     "right_stick": { "type": "scroll", "speed": 3, "y_inverted": true },
     "L3":          { "type": "left_click" },
     "R3":          { "type": "right_click" }
@@ -416,20 +503,20 @@ Set `"debug_overlay": false` (or omit the field) for production use.
       "apps": ["com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2"],
       "default_mode": "shell",
       "global": {
-        "options": { "type": "mode_select" }
+        "options": { "type": "mode_select" },
+        "LB":      { "type": "prev_mode" },
+        "RB":      { "type": "next_mode" }
       },
       "modes": {
         "shell": {
           "A":          { "type": "keystroke", "key": "return" },
           "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
           "X":          { "type": "keystroke", "key": "l", "modifiers": ["ctrl"] },
-          "Y":          { "type": "keystroke", "key": "z", "modifiers": ["ctrl"] },
+          "Y":          { "type": "menu:git" },
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
-          "dpad_right": { "type": "keystroke", "key": "right" },
-          "LB":         { "type": "keystroke", "key": "tab", "modifiers": ["shift"] },
-          "RB":         { "type": "keystroke", "key": "tab" }
+          "dpad_right": { "type": "keystroke", "key": "right" }
         },
         "nvim": {
           "A":          { "type": "keystroke", "key": "return" },
@@ -481,6 +568,17 @@ Set `"debug_overlay": false` (or omit the field) for production use.
         }
       }
     }
+  },
+  "menus": {
+    "git": [
+      { "label": "git status",    "action": { "type": "keystroke", "key": "`git status\n`" } },
+      { "label": "git diff",      "action": { "type": "keystroke", "key": "`git diff\n`" } },
+      { "label": "git log",       "action": { "type": "keystroke", "key": "`git log --oneline -20\n`" } },
+      { "label": "git pull",      "action": { "type": "keystroke", "key": "`git pull\n`" } },
+      { "label": "git push",      "action": { "type": "keystroke", "key": "`git push\n`" } },
+      { "label": "git stash",     "action": { "type": "keystroke", "key": "`git stash\n`" } },
+      { "label": "git stash pop", "action": { "type": "keystroke", "key": "`git stash pop\n`" } }
+    ]
   }
 }
 ```
@@ -494,4 +592,7 @@ PadIO requires **Accessibility** permission to post synthetic keyboard events to
 - Open the **PadIO menu bar icon** → **Grant Accessibility Access** to trigger the system prompt.
 - Or go to **System Settings → Privacy & Security → Accessibility** and add PadIO manually.
 
-Media key events (`play_pause`, `next_track`, etc.) do **not** require Accessibility permission.
+The following action types do **not** require Accessibility permission and work unconditionally:
+- Media key events (`play_pause`, `next_track`, `volume_up`, etc.)
+- `keyboard_viewer`
+- `next_input_source`
