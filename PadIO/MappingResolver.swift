@@ -23,6 +23,22 @@ enum Action: Sendable {
     case textInput(text: String)
     /// Show the mode picker overlay.
     case modeSelect
+    /// Emit a left mouse button click at the current cursor position.
+    case leftClick
+    /// Emit a right mouse button click at the current cursor position.
+    case rightClick
+}
+
+// MARK: - Axis mapping
+
+/// A resolved axis-to-pointer mapping derived from an ActionConfig with type "mouse_move" or "scroll".
+struct AxisMapping: Sendable {
+    enum Kind: Sendable { case mouseMove, scroll }
+    let kind: Kind
+    let xSpeed: CGFloat
+    let ySpeed: CGFloat
+    let xInverted: Bool
+    let yInverted: Bool
 }
 
 // MARK: - Resolver
@@ -83,6 +99,58 @@ struct MappingResolver {
         }
 
         return nil
+    }
+
+    // MARK: - Axis resolution
+
+    /// Resolves an axis mapping for a given axis source using the same cascade as button resolution.
+    ///
+    /// Resolution order: top-level global → profile global → active mode bindings.
+    func resolveAxisMapping(axisID: AxisID, profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> AxisMapping? {
+        let key = axisID.rawValue
+
+        if let actionConfig = config.global[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        guard let profile else { return nil }
+
+        if let actionConfig = profile.global[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        if let modeName = activeMode,
+           let mode = profile.modes[modeName],
+           let actionConfig = mode.bindings[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        return nil
+    }
+
+    private func buildAxisMapping(from config: ActionConfig) -> AxisMapping? {
+        let kind: AxisMapping.Kind
+        let defaultSpeed: CGFloat
+        switch config.type {
+        case "mouse_move":
+            kind = .mouseMove
+            defaultSpeed = 15
+        case "scroll":
+            kind = .scroll
+            defaultSpeed = 3
+        default:
+            return nil
+        }
+        let base = CGFloat(config.speed ?? Double(defaultSpeed))
+        let xSpeed = CGFloat(config.xSpeed.map { CGFloat($0) } ?? base)
+        let ySpeed = CGFloat(config.ySpeed.map { CGFloat($0) } ?? base)
+        return AxisMapping(
+            kind: kind,
+            xSpeed: xSpeed,
+            ySpeed: ySpeed,
+            xInverted: config.xInverted ?? false,
+            yInverted: config.yInverted ?? false
+        )
     }
 
     // MARK: - All bindings (for Help HUD)
@@ -177,6 +245,16 @@ struct MappingResolver {
         case "mode_select":
             return .modeSelect
 
+        case "left_click":
+            return .leftClick
+
+        case "right_click":
+            return .rightClick
+
+        case "mouse_move", "scroll":
+            // Axis-only types; not dispatched as one-shot Actions from the button pipeline.
+            return nil
+
         default:
             print("[PadIO] Unknown action type: '\(config.type)'")
             return nil
@@ -205,6 +283,12 @@ struct MappingResolver {
 
         case .modeSelect:
             return "mode_select"
+
+        case .leftClick:
+            return "left_click"
+
+        case .rightClick:
+            return "right_click"
         }
     }
 

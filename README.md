@@ -154,6 +154,83 @@ Opens the mode picker overlay. Navigate with dpad up/down, confirm with A or RT,
 
 Typically bound to the `options` button in a profile's `global` section.
 
+### `left_click` / `right_click`
+
+Emit a left or right mouse click at the current cursor position. Requires Accessibility permission.
+
+```json
+{ "type": "left_click" }
+{ "type": "right_click" }
+```
+
+Useful bound to thumbstick clicks (`L3`, `R3`) alongside axis-mapped stick movement.
+
+### `mouse_move`
+
+Map a joystick or dpad to continuous mouse cursor movement. Used as a **mode binding key** with the axis source name (`left_stick`, `right_stick`, `dpad`) as the key.
+
+```json
+"left_stick": {
+  "type": "mouse_move",
+  "speed": 15
+}
+```
+
+```json
+"left_stick": {
+  "type": "mouse_move",
+  "x_speed": 20,
+  "y_speed": 12,
+  "y_inverted": true
+}
+```
+
+| Field        | Type    | Default | Description |
+|--------------|---------|---------|-------------|
+| `speed`      | number  | `15`    | Base speed multiplier applied to both axes. |
+| `x_speed`    | number  | `speed` | Speed multiplier for the X axis (overrides `speed`). |
+| `y_speed`    | number  | `speed` | Speed multiplier for the Y axis (overrides `speed`). |
+| `x_inverted` | boolean | `false` | Invert the horizontal axis. |
+| `y_inverted` | boolean | `false` | Invert the vertical axis. |
+
+Axis events are emitted every tick (~60Hz) while the stick is deflected beyond the deadzone (0.1). The cursor movement per tick is `axis_value × speed`.
+
+### `scroll`
+
+Map a joystick or dpad to continuous scroll wheel events. Same parameters as `mouse_move` but controls scrolling instead of cursor position.
+
+```json
+"right_stick": {
+  "type": "scroll",
+  "speed": 3,
+  "y_inverted": true
+}
+```
+
+| Field        | Type    | Default | Description |
+|--------------|---------|---------|-------------|
+| `speed`      | number  | `3`     | Base scroll speed multiplier applied to both axes. |
+| `x_speed`    | number  | `speed` | Speed multiplier for horizontal scroll (overrides `speed`). |
+| `y_speed`    | number  | `speed` | Speed multiplier for vertical scroll (overrides `speed`). |
+| `x_inverted` | boolean | `false` | Invert horizontal scroll direction. |
+| `y_inverted` | boolean | `false` | Invert vertical scroll direction. |
+
+---
+
+## Axis Source Names
+
+Use these as binding keys alongside button names in any `global` or mode binding dictionary:
+
+| Key            | Source                                           |
+|----------------|--------------------------------------------------|
+| `left_stick`   | Left thumbstick (analog, -1…+1 per axis)        |
+| `right_stick`  | Right thumbstick (analog, -1…+1 per axis)       |
+| `dpad`         | D-pad (treated as digital: -1, 0, or +1)        |
+
+> **Note:** When `dpad` is used as an axis source for `mouse_move` or `scroll`, the individual dpad direction buttons (`dpad_up`, `dpad_down`, etc.) should not also be bound in the same mode — they will still fire as buttons.
+
+---
+
 ### `sequence`
 
 Fires multiple keystrokes in order, with a configurable delay between each. Useful for terminal prefix sequences (e.g. tmux `ctrl-a` then `n`).

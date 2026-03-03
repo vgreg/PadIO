@@ -165,4 +165,67 @@ struct InputHandler {
 
         print("[PadIO] Emitted media key: keyType=\(keyType)")
     }
+
+    // MARK: - Mouse movement
+
+    /// Move the mouse cursor by the given pixel delta relative to its current position.
+    func emitMouseMove(dx: CGFloat, dy: CGFloat) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        // Get current cursor position via a dummy move event
+        let currentPos = CGEvent(source: nil)?.location ?? .zero
+        let newPos = CGPoint(x: currentPos.x + dx, y: currentPos.y + dy)
+
+        guard let event = CGEvent(
+            mouseEventSource: source,
+            mouseType: .mouseMoved,
+            mouseCursorPosition: newPos,
+            mouseButton: .left
+        ) else { return }
+
+        event.setIntegerValueField(.mouseEventDeltaX, value: Int64(dx))
+        event.setIntegerValueField(.mouseEventDeltaY, value: Int64(dy))
+        event.post(tap: .cgSessionEventTap)
+    }
+
+    // MARK: - Scroll wheel
+
+    /// Emit a scroll wheel event with the given pixel deltas.
+    /// `dy` is vertical (positive = scroll up), `dx` is horizontal (positive = scroll right).
+    func emitScroll(dx: CGFloat, dy: CGFloat) {
+        // CGEvent scroll wheel uses Int32 pixel values; clamp to reasonable range
+        let wheel1 = Int32(exactly: Int(dy.rounded())) ?? (dy > 0 ? Int32.max : Int32.min)
+        let wheel2 = Int32(exactly: Int(dx.rounded())) ?? (dx > 0 ? Int32.max : Int32.min)
+
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let event = CGEvent(
+            scrollWheelEvent2Source: source,
+            units: .pixel,
+            wheelCount: 2,
+            wheel1: wheel1,
+            wheel2: wheel2,
+            wheel3: 0
+        ) else { return }
+
+        event.post(tap: .cgSessionEventTap)
+    }
+
+    // MARK: - Mouse click
+
+    /// Emit a mouse button down + up at the current cursor position.
+    func emitMouseClick(button: CGMouseButton) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        let pos = CGEvent(source: nil)?.location ?? .zero
+        let downType: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
+        let upType:   CGEventType = button == .left ? .leftMouseUp   : .rightMouseUp
+
+        guard
+            let down = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: pos, mouseButton: button),
+            let up   = CGEvent(mouseEventSource: source, mouseType: upType,   mouseCursorPosition: pos, mouseButton: button)
+        else { return }
+
+        down.post(tap: .cgSessionEventTap)
+        up.post(tap: .cgSessionEventTap)
+
+        print("[PadIO] Emitted mouse click: \(button == .left ? "left" : "right")")
+    }
 }

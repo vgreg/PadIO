@@ -85,21 +85,42 @@ final class ActionConfig: Codable, Sendable {
     let steps: [ActionConfig]?
     /// For "sequence": delay in seconds between steps. Defaults to 0.05.
     let delay: Double?
+    /// For "mouse_move" / "scroll": base speed multiplier for both axes.
+    let speed: Double?
+    /// For "mouse_move" / "scroll": speed multiplier for the X axis (overrides `speed`).
+    let xSpeed: Double?
+    /// For "mouse_move" / "scroll": speed multiplier for the Y axis (overrides `speed`).
+    let ySpeed: Double?
+    /// For "mouse_move" / "scroll": invert the X axis.
+    let xInverted: Bool?
+    /// For "mouse_move" / "scroll": invert the Y axis.
+    let yInverted: Bool?
     /// Reserved for future dual-use: action config when button is pressed briefly.
     let trigger: ActionConfig?
     /// Reserved for future dual-use: mode name to hold while button is held.
     let hold: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, key, modifiers, steps, delay, trigger, hold
+        case type, key, modifiers, steps, delay
+        case speed
+        case xSpeed = "x_speed"
+        case ySpeed = "y_speed"
+        case xInverted = "x_inverted"
+        case yInverted = "y_inverted"
+        case trigger, hold
     }
 
-    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
+    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
         self.type = type
         self.key = key
         self.modifiers = modifiers
         self.steps = steps
         self.delay = delay
+        self.speed = speed
+        self.xSpeed = xSpeed
+        self.ySpeed = ySpeed
+        self.xInverted = xInverted
+        self.yInverted = yInverted
         self.trigger = trigger
         self.hold = hold
     }

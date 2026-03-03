@@ -108,6 +108,9 @@ final class ControllerManager: ObservableObject {
     // Previous pressed state per controller, keyed by ObjectIdentifier
     private var previousButtonStates: [ObjectIdentifier: [ButtonID: Bool]] = [:]
 
+    /// Minimum axis deflection required to produce mouse/scroll events (eliminates stick drift).
+    private static let axisDeadzone: Float = 0.1
+
     private func startPollingTimer() {
         // Poll at ~60Hz — fast enough to catch quick taps
         Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -122,6 +125,7 @@ final class ControllerManager: ObservableObject {
             let id = ObjectIdentifier(controller)
             var prev = previousButtonStates[id] ?? [:]
 
+            // Edge-triggered button dispatch
             for buttonID in ButtonID.allCases {
                 let pressed = isPressed(buttonID: buttonID, gamepad: gamepad, threshold: threshold)
                 let wasPressed = prev[buttonID] ?? false
@@ -131,6 +135,64 @@ final class ControllerManager: ObservableObject {
                 prev[buttonID] = pressed
             }
             previousButtonStates[id] = prev
+
+            // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
+            guard !helpOverlay.isVisible && !modePicker.isVisible else { continue }
+            guard accessibilityPermission.isGranted else { continue }
+            pollAxes(gamepad: gamepad)
+        }
+    }
+
+    /// Read and dispatch any active axis-to-pointer mappings for this tick.
+    private func pollAxes(gamepad: GCExtendedGamepad) {
+        let config = configLoader.config
+        let bundleID = appObserver.frontmostBundleID
+        guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else { return }
+        let modeName = profileModes[profileName] ?? profile.defaultMode
+
+        for axisID in AxisID.allCases {
+            guard let mapping = mappingResolver.resolveAxisMapping(
+                axisID: axisID,
+                profile: profile,
+                activeMode: modeName,
+                config: config
+            ) else { continue }
+
+            let (rawX, rawY) = readAxisValues(axisID: axisID, gamepad: gamepad)
+
+            // Apply deadzone — treat small deflections as zero to suppress stick drift
+            let x = abs(rawX) > Self.axisDeadzone ? rawX : 0
+            let y = abs(rawY) > Self.axisDeadzone ? rawY : 0
+            guard x != 0 || y != 0 else { continue }
+
+            // Compute per-tick pixel delta: axis * speed * inversionSign / tickRate
+            let xSign: CGFloat = mapping.xInverted ? -1 : 1
+            let ySign: CGFloat = mapping.yInverted ? -1 : 1
+            let dx = CGFloat(x) * mapping.xSpeed * xSign
+            let dy = CGFloat(y) * mapping.ySpeed * ySign
+
+            switch mapping.kind {
+            case .mouseMove:
+                // Screen Y axis is flipped: positive stick-Y = up = negative screen-Y
+                inputHandler.emitMouseMove(dx: dx, dy: -dy)
+            case .scroll:
+                inputHandler.emitScroll(dx: dx, dy: dy)
+            }
+        }
+    }
+
+    /// Returns the normalised (x, y) axis values for the given axis source (-1…+1).
+    /// Dpad is treated as digital: produces ±1 per direction, 0 when not pressed.
+    private func readAxisValues(axisID: AxisID, gamepad: GCExtendedGamepad) -> (x: Float, y: Float) {
+        switch axisID {
+        case .leftStick:
+            return (gamepad.leftThumbstick.xAxis.value, gamepad.leftThumbstick.yAxis.value)
+        case .rightStick:
+            return (gamepad.rightThumbstick.xAxis.value, gamepad.rightThumbstick.yAxis.value)
+        case .dpad:
+            let x: Float = gamepad.dpad.right.isPressed ? 1 : (gamepad.dpad.left.isPressed ? -1 : 0)
+            let y: Float = gamepad.dpad.up.isPressed    ? 1 : (gamepad.dpad.down.isPressed ? -1 : 0)
+            return (x, y)
         }
     }
 
@@ -255,6 +317,20 @@ final class ControllerManager: ObservableObject {
                 self.activeModeName = selectedMode
                 print("[PadIO] Mode changed to '\(selectedMode)' in profile '\(profileName)'")
             }
+
+        case .leftClick:
+            guard accessibilityPermission.isGranted else {
+                print("[PadIO] Accessibility permission not granted — cannot emit mouse clicks.")
+                return
+            }
+            inputHandler.emitMouseClick(button: .left)
+
+        case .rightClick:
+            guard accessibilityPermission.isGranted else {
+                print("[PadIO] Accessibility permission not granted — cannot emit mouse clicks.")
+                return
+            }
+            inputHandler.emitMouseClick(button: .right)
         }
     }
 

@@ -34,6 +34,13 @@ enum ButtonID: String, CaseIterable, Sendable {
     case paddle4 = "paddle4"
 }
 
+/// Canonical axis source identifiers used as keys in the mapping config.
+enum AxisID: String, CaseIterable, Sendable {
+    case leftStick  = "left_stick"
+    case rightStick = "right_stick"
+    case dpad       = "dpad"
+}
+
 /// Maps GCControllerElement references to ButtonID values.
 struct ButtonIdentifier {
 
