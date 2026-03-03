@@ -51,13 +51,17 @@ final class ModeNotificationController {
         viewModel.modeName = modeName
 
         if panel == nil { createPanel() }
+
+        // Cancel any in-flight fade and snap alpha back before reshowing
+        dismissWork?.cancel()
+        panel?.alphaValue = 1
+
         repositionPanel()
         panel?.orderFrontRegardless()
 
-        // Cancel any pending auto-dismiss and schedule a fresh one
-        dismissWork?.cancel()
+        // Schedule auto-dismiss with fade-out
         let work = DispatchWorkItem { [weak self] in
-            self?.hide()
+            self?.fadeOut()
         }
         dismissWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
@@ -66,7 +70,22 @@ final class ModeNotificationController {
     func hide() {
         dismissWork?.cancel()
         dismissWork = nil
+        panel?.alphaValue = 1
         panel?.orderOut(nil)
+    }
+
+    private func fadeOut() {
+        dismissWork = nil
+        guard let panel else { return }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.35
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                self?.panel?.orderOut(nil)
+                self?.panel?.alphaValue = 1
+            }
+        })
     }
 
     // MARK: - Panel creation
@@ -95,8 +114,9 @@ final class ModeNotificationController {
 
     private func repositionPanel() {
         guard let panel, let screen = NSScreen.main else { return }
-        // Resize to fit current content first
+        // Flush pending layout so fittingSize reflects the new content
         if let hosting = panel.contentView as? NSHostingView<ModeNotificationView> {
+            hosting.layoutSubtreeIfNeeded()
             panel.setContentSize(hosting.fittingSize)
         }
         let screenFrame = screen.visibleFrame
