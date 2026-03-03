@@ -119,8 +119,30 @@ Fires a single synthetic key event.
 
 | Field       | Type     | Required | Description |
 |-------------|----------|----------|-------------|
-| `key`       | string   | yes      | Key name (see [Key Names](#key-names) below). |
-| `modifiers` | string[] | no       | Modifier keys to hold while pressing (see [Modifiers](#modifiers)). |
+| `key`       | string   | yes      | Key name (see [Key Names](#key-names) below), or a backtick-delimited unicode string (see [Unicode Text](#unicode-text)). |
+| `modifiers` | string[] | no       | Modifier keys to hold while pressing (see [Modifiers](#modifiers)). Ignored for unicode text. |
+
+#### Unicode Text
+
+Wrap any unicode text in backticks to inject it directly — bypassing keyboard layout and supporting any character: accents, emoji, arrows, CJK, or multi-character strings.
+
+```json
+{ "type": "keystroke", "key": "`é`" }
+{ "type": "keystroke", "key": "`🎉`" }
+{ "type": "keystroke", "key": "`→`" }
+{ "type": "keystroke", "key": "`hello world`" }
+```
+
+Escape sequences inside backtick strings:
+- `` \` `` → literal backtick
+- `\\` → literal backslash
+
+```json
+{ "type": "keystroke", "key": "`contains \\` backtick`" }
+{ "type": "keystroke", "key": "`backslash: \\\\`" }
+```
+
+The `modifiers` field has no effect on unicode text actions.
 
 ### `mode_select`
 

@@ -99,6 +99,37 @@ struct InputHandler {
         }
     }
 
+    // MARK: - Unicode text injection
+
+    /// Inject a unicode string into the frontmost app using CGEvent unicode string support.
+    /// This bypasses the key code → character mapping entirely, allowing any Unicode text
+    /// (accents, emoji, CJK, multi-character strings) to be typed regardless of keyboard layout.
+    ///
+    /// The text is sent as a single key-down/key-up pair with the full UTF-16 string attached,
+    /// which most text-input-aware apps (terminals, editors, text fields) handle correctly.
+    func emitText(_ text: String) {
+        guard !text.isEmpty else { return }
+
+        let source = CGEventSource(stateID: .hidSystemState)
+        // Virtual key code 0 is used as a placeholder; the unicode string takes precedence.
+        guard
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+            let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+        else {
+            print("[PadIO] Failed to create CGEvent for text input")
+            return
+        }
+
+        var utf16 = Array(text.utf16)
+        keyDown.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+        keyUp.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: &utf16)
+
+        keyDown.post(tap: .cgSessionEventTap)
+        keyUp.post(tap: .cgSessionEventTap)
+
+        print("[PadIO] Emitted text: \(text)")
+    }
+
     // MARK: - Media/special keys
 
     /// Emit a media/special key event (play/pause, volume, brightness, etc.)

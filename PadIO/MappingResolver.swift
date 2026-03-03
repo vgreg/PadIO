@@ -19,6 +19,8 @@ enum Action: Sendable {
     case sequence(steps: [(keyCode: CGKeyCode, flags: CGEventFlags)], delay: TimeInterval)
     /// Emit a system-defined media/special key event (play/pause, volume, etc.).
     case mediaKey(keyType: Int32)
+    /// Inject a unicode string directly into the frontmost app (bypasses key code mapping).
+    case textInput(text: String)
     /// Show the mode picker overlay.
     case modeSelect
 }
@@ -133,6 +135,13 @@ struct MappingResolver {
                 print("[PadIO] Keystroke action missing 'key'")
                 return nil
             }
+            // Backtick-delimited value → unicode text injection
+            // Syntax: `text` where \` = literal backtick, \\ = literal backslash
+            if keyName.hasPrefix("`") && keyName.hasSuffix("`") && keyName.count >= 2 {
+                let inner = String(keyName.dropFirst().dropLast())
+                let text = Self.unescapeBacktickString(inner)
+                return .textInput(text: text)
+            }
             // Check if the key name refers to a media/special key
             if let mediaKeyType = Self.mediaKeyMap[keyName.lowercased()] {
                 return .mediaKey(keyType: mediaKeyType)
@@ -189,6 +198,11 @@ struct MappingResolver {
             let name = mediaKeyMap.first(where: { $0.value == keyType })?.key ?? "0x\(String(keyType, radix: 16))"
             return "media: \(name)"
 
+        case .textInput(let text):
+            // Show a truncated preview for long strings
+            let preview = text.count > 20 ? String(text.prefix(20)) + "…" : text
+            return "text: \(preview)"
+
         case .modeSelect:
             return "mode_select"
         }
@@ -211,6 +225,37 @@ struct MappingResolver {
         if flags.contains(.maskAlternate) { parts.insert("alt", at: 0) }
         if flags.contains(.maskShift)     { parts.insert("shift", at: 0) }
         return parts.joined(separator: "+")
+    }
+
+    // MARK: - Backtick string unescaping
+
+    /// Processes escape sequences inside a backtick-delimited unicode string.
+    /// - `\`` → literal backtick
+    /// - `\\` → literal backslash
+    private static func unescapeBacktickString(_ raw: String) -> String {
+        var result = ""
+        var iterator = raw.makeIterator()
+        while let ch = iterator.next() {
+            if ch == "\\" {
+                // Consume the next character as an escape
+                if let next = iterator.next() {
+                    switch next {
+                    case "`":  result.append("`")
+                    case "\\": result.append("\\")
+                    default:
+                        // Unknown escape: keep both characters
+                        result.append("\\")
+                        result.append(next)
+                    }
+                } else {
+                    // Trailing backslash — keep it
+                    result.append("\\")
+                }
+            } else {
+                result.append(ch)
+            }
+        }
+        return result
     }
 
     // MARK: - Key name → CGKeyCode

@@ -235,6 +235,13 @@ final class ControllerManager: ObservableObject {
             }
             inputHandler.emitSequence(steps: steps, delay: delay)
 
+        case .textInput(let text):
+            guard accessibilityPermission.isGranted else {
+                print("[PadIO] Accessibility permission not granted — cannot inject text.")
+                return
+            }
+            inputHandler.emitText(text)
+
         case .mediaKey(let keyType):
             // Media keys do not require Accessibility permission
             inputHandler.emitMediaKey(keyType: keyType)
