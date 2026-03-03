@@ -14,13 +14,14 @@ struct MenuBarView: View {
     @EnvironmentObject var controllerManager: ControllerManager
     @EnvironmentObject var appObserver: AppObserver
     @EnvironmentObject var configLoader: ConfigLoader
+    @EnvironmentObject var axPermission: AccessibilityPermission
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         // Accessibility permission warning
-        if !InputHandler.hasAccessibilityPermission() {
+        if !axPermission.isGranted {
             Button("Grant Accessibility Access…") {
-                InputHandler.requestAccessibilityPermission()
+                axPermission.request()
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                     openURL(url)
                 }

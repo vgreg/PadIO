@@ -17,13 +17,18 @@ final class ControllerManager: ObservableObject {
     /// Currently active mode name within the active profile.
     @Published private(set) var activeModeName: String? = nil
 
-    let appObserver  = AppObserver()
-    let configLoader = ConfigLoader()
+    let appObserver           = AppObserver()
+    let configLoader          = ConfigLoader()
+    let accessibilityPermission = AccessibilityPermission()
+
+    /// Set to false before release to disable the debug input HUD.
+    static let debugOverlayEnabled = true
 
     private let inputHandler    = InputHandler()
     private let mappingResolver = MappingResolver()
-    private let windowTracker   = WindowModeTracker()
+    private var profileModes:   [String: String] = [:]  // profileName → active mode
     private let modePicker      = ModePickerController()
+    private let debugOverlay    = DebugInputController()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -36,13 +41,11 @@ final class ControllerManager: ObservableObject {
 
         // Re-resolve profile when the frontmost app changes
         appObserver.$frontmostBundleID
-            .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshActiveProfile() }
             .store(in: &cancellables)
 
         // Re-resolve profile when config reloads
         configLoader.$config
-            .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshActiveProfile() }
             .store(in: &cancellables)
     }
@@ -59,15 +62,11 @@ final class ControllerManager: ObservableObject {
             return
         }
 
-        // If switching to a different profile, pick up the window's stored mode
+        // Update profile name; mode will be resolved lazily on next button press
+        // (avoids calling CGWindowListCopyWindowInfo on the main thread here)
         if name != activeProfileName {
             activeProfileName = name
-            let windowID = windowTracker.frontmostWindowID()
-            if let wid = windowID {
-                activeModeName = windowTracker.mode(for: wid, defaultMode: profile.defaultMode)
-            } else {
-                activeModeName = profile.defaultMode
-            }
+            activeModeName = profile.defaultMode
         }
     }
 
@@ -172,17 +171,14 @@ final class ControllerManager: ObservableObject {
         // Resolve which profile matches the current app
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else {
             print("[PadIO] \(buttonID.rawValue) | no profile")
+            if Self.debugOverlayEnabled {
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile")
+            }
             return
         }
 
-        // Determine the active mode for the current window
-        let windowID = windowTracker.frontmostWindowID()
-        let modeName: String
-        if let wid = windowID {
-            modeName = windowTracker.mode(for: wid, defaultMode: profile.defaultMode)
-        } else {
-            modeName = profile.defaultMode
-        }
+        // Determine the active mode for this profile
+        let modeName = profileModes[profileName] ?? profile.defaultMode
 
         print("[PadIO] \(buttonID.rawValue) | profile: \(profileName) | mode: \(modeName)")
 
@@ -193,21 +189,30 @@ final class ControllerManager: ObservableObject {
             config: config
         ) else {
             print("[PadIO] No mapping for \(buttonID.rawValue)")
+            if Self.debugOverlayEnabled {
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping")
+            }
             return
         }
 
-        executeAction(action, profile: profile, profileName: profileName, windowID: windowID, currentMode: modeName)
+        if Self.debugOverlayEnabled {
+            debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action))
+        }
+        executeAction(action, profile: profile, profileName: profileName, currentMode: modeName)
     }
 
     private func executeAction(
         _ action: Action,
         profile: ProfileConfig,
         profileName: String,
-        windowID: CGWindowID?,
         currentMode: String
     ) {
         switch action {
         case .keystroke(let keyCode, let flags):
+            guard accessibilityPermission.isGranted else {
+                print("[PadIO] Accessibility permission not granted — cannot emit keystrokes.")
+                return
+            }
             inputHandler.emitKeystroke(keyCode: keyCode, flags: flags)
 
         case .modeSelect:
@@ -215,9 +220,7 @@ final class ControllerManager: ObservableObject {
             guard !modes.isEmpty else { return }
             modePicker.show(modes: modes, currentMode: currentMode) { [weak self] selectedMode in
                 guard let self else { return }
-                if let wid = windowID {
-                    self.windowTracker.setMode(selectedMode, for: wid)
-                }
+                self.profileModes[profileName] = selectedMode
                 self.activeModeName = selectedMode
                 print("[PadIO] Mode changed to '\(selectedMode)' in profile '\(profileName)'")
             }

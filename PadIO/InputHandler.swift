@@ -9,35 +9,64 @@
 import Foundation
 import CoreGraphics
 import AppKit
+import Combine
 
-struct InputHandler {
+// MARK: - Permission tracker
 
-    // MARK: - Accessibility
+/// Tracks Accessibility permission state without polling on every SwiftUI redraw.
+/// Checks once at init, once when the app becomes active, and on explicit request.
+@MainActor
+final class AccessibilityPermission: ObservableObject {
+    @Published private(set) var isGranted: Bool = false
 
-    /// Returns true if the app has been granted Accessibility (AX) access.
-    static func hasAccessibilityPermission() -> Bool {
+    private var observer: NSObjectProtocol?
+
+    init() {
+        isGranted = Self.check()
+
+        // Re-check whenever the app comes back to the foreground (e.g. after
+        // the user grants permission in System Settings and switches back).
+        observer = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard app?.bundleIdentifier == Bundle.main.bundleIdentifier else { return }
+            MainActor.assumeIsolated { self?.recheck() }
+        }
+    }
+
+    deinit {
+        if let observer { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+    }
+
+    func recheck() {
+        isGranted = Self.check()
+    }
+
+    /// Triggers the system prompt and rechecks. Call from the menu "Grant Access" button.
+    func request() {
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
+        _ = AXIsProcessTrustedWithOptions(options)
+        recheck()
+    }
+
+    private static func check() -> Bool {
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): false]
         return AXIsProcessTrustedWithOptions(options)
     }
+}
 
-    /// Triggers the system Accessibility permission prompt and registers the app
-    /// in System Settings > Privacy & Security > Accessibility.
-    /// Has no effect when running under Xcode's debugger (use the built .app instead).
-    static func requestAccessibilityPermission() {
-        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
-        _ = AXIsProcessTrustedWithOptions(options)
-    }
+// MARK: - Keystroke emitter
+
+struct InputHandler {
 
     // MARK: - Keystroke emission
 
     /// Emit a key-down then key-up event for the given virtual key code.
     /// `keyCode` uses Core Graphics virtual key codes (e.g. 0x31 = space).
     func emitKeystroke(keyCode: CGKeyCode, flags: CGEventFlags = []) {
-        guard InputHandler.hasAccessibilityPermission() else {
-            print("[PadIO] Accessibility permission not granted — cannot emit keystrokes.")
-            return
-        }
-
         let source = CGEventSource(stateID: .hidSystemState)
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),

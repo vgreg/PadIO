@@ -104,6 +104,24 @@ struct MappingResolver {
         }
     }
 
+    // MARK: - Action description
+
+    static func describe(_ action: Action) -> String {
+        switch action {
+        case .keystroke(let keyCode, let flags):
+            // Reverse-look up key name for display
+            let keyName = keyCodeMap.first(where: { $0.value == keyCode })?.key ?? "0x\(String(keyCode, radix: 16))"
+            var parts: [String] = [keyName]
+            if flags.contains(.maskCommand)   { parts.insert("cmd", at: 0) }
+            if flags.contains(.maskControl)   { parts.insert("ctrl", at: 0) }
+            if flags.contains(.maskAlternate) { parts.insert("alt", at: 0) }
+            if flags.contains(.maskShift)     { parts.insert("shift", at: 0) }
+            return "keystroke: \(parts.joined(separator: "+"))"
+        case .modeSelect:
+            return "mode_select"
+        }
+    }
+
     // MARK: - Key name → CGKeyCode
 
     static func keyCode(for name: String) -> CGKeyCode? {

@@ -27,7 +27,8 @@ final class AppObserver: ObservableObject {
             queue: .main
         ) { [weak self] notification in
             let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            Task { @MainActor [weak self] in
+            // Already on main queue; update directly without an extra async hop
+            MainActor.assumeIsolated {
                 self?.frontmostBundleID = app?.bundleIdentifier
             }
         }

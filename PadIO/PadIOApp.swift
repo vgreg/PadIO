@@ -11,16 +11,13 @@ import SwiftUI
 struct PadIOApp: App {
     @StateObject private var controllerManager = ControllerManager()
 
-    init() {
-        InputHandler.requestAccessibilityPermission()
-    }
-
     var body: some Scene {
         MenuBarExtra("PadIO", systemImage: "gamecontroller") {
             MenuBarView()
                 .environmentObject(controllerManager)
                 .environmentObject(controllerManager.appObserver)
                 .environmentObject(controllerManager.configLoader)
+                .environmentObject(controllerManager.accessibilityPermission)
         }
         .menuBarExtraStyle(.menu)
     }
