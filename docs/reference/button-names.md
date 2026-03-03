@@ -26,4 +26,14 @@ These are the valid button names for use as binding keys in any `global` or mode
 !!! note
     The `menu` button is reserved for the Help HUD and cannot be rebound via config.
 
+## Button combos
+
+Any button can be used as a modifier by holding it while pressing another button. Use `"<modifier>+<button>"` as the binding key:
+
+```json
+"X+dpad_up": { "type": "keystroke", "key": "k", "modifiers": ["ctrl"] }
+```
+
+This fires when X is held and dpad_up is pressed. See [Profiles & Modes](../configuration/profiles.md#button-combos) for full details.
+
 See [Controller Compatibility](controllers.md) for how these map to physical buttons on different controllers.

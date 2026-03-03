@@ -31,10 +31,9 @@ GCController (GameController framework)
 pollControllers()
   ├─ Edge-detect button presses → handleMappedButton()
   │     ├─ Overlay priority: helpOverlay → modePicker → customMenu → menu button
-  │     ├─ MappingResolver.resolve() — applies cascade:
-  │     │     1. top-level config.global
-  │     │     2. profile.global
-  │     │     3. active mode bindings
+  │     ├─ MappingResolver.resolve(heldButtons:) — applies cascade:
+  │     │     1–3. combo keys (modifier+button) through global → profile → mode
+  │     │     4–6. plain keys through global → profile → mode
   │     └─ executeAction() → InputHandler / overlays / HapticController
   └─ pollAxes() — continuous axis → mouse/scroll emission (skipped when overlay visible)
 ```
@@ -57,9 +56,14 @@ pollControllers()
 
 Profile is selected by matching the frontmost app's bundle ID against `profile.apps[]`, falling back to the `"default"` profile. Within a profile, bindings resolve in this priority order (highest wins):
 
-1. Top-level `config.global`
-2. `profile.global`
-3. Active mode bindings (`profile.modes[activeModeString]`)
+1. Combo key (`modifier+button`) in top-level `config.global`
+2. Combo key in `profile.global`
+3. Combo key in active mode bindings
+4. Plain key in top-level `config.global`
+5. Plain key in `profile.global`
+6. Plain key in active mode bindings (`profile.modes[activeModeString]`)
+
+Combo keys use the syntax `"<modifier>+<button>"` (e.g., `"X+dpad_up"`) in any bindings dictionary. When multiple buttons are held, `ButtonID.allCases` order determines which modifier is tried first.
 
 Mode state is stored in `ControllerManager.profileModes: [profileName: modeName]`.
 
@@ -86,6 +90,16 @@ Axis events (`pollAxes`) are suppressed entirely while any overlay is visible.
 ### Haptics
 
 `HapticController` caches `CHHapticEngine` instances keyed by `(ObjectIdentifier(controller), GCHapticsLocality)`. Engines are created via `GCDeviceHaptics.createEngine(withLocality:)` — not `CHHapticEngine()` directly. `HapticEventObserver` listens to `DistributedNotificationCenter` for system beep (`com.apple.sound.alert.played`) and notification (`com.apple.usernotifications.notification-posted`) events.
+
+## Documentation
+
+When making changes to config format, action types, button names, or any user-facing behavior, always update:
+
+1. **`README.md`** — if the change affects the quick-start or feature list
+2. **`docs/`** — the relevant MkDocs documentation page(s)
+3. **`config.json`** — the sample config in the repo root, if applicable
+
+The docs site is built with MkDocs Material (`mkdocs.yml`). Preview locally with `uv run --with mkdocs-material mkdocs serve`.
 
 ## Key Conventions
 

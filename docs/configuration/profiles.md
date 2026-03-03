@@ -58,12 +58,34 @@ Each profile can have multiple modes. Only one mode is active at a time. Switch 
 - [`prev_mode` / `next_mode`](actions.md#prev_mode-next_mode) — cycle through modes
 - [`mode:<name>`](actions.md#modename) — jump directly to a named mode
 
+## Button combos
+
+Hold one button as a modifier to change what another button does. Use the syntax `"<modifier>+<button>"` as a binding key:
+
+```json
+"nvim": {
+  "dpad_up":     { "type": "keystroke", "key": "k" },
+  "dpad_down":   { "type": "keystroke", "key": "j" },
+  "X+dpad_up":   { "type": "keystroke", "key": "k", "modifiers": ["ctrl"] },
+  "X+dpad_down": { "type": "keystroke", "key": "j", "modifiers": ["ctrl"] }
+}
+```
+
+In this example, pressing dpad_up sends `k`, but holding X and pressing dpad_up sends `ctrl-k` instead.
+
+Combo keys work in top-level `global`, profile `global`, and mode bindings — anywhere regular button keys work. The modifier button still fires its own action when first pressed; users who want a "pure modifier" button simply don't bind it to any action.
+
 ## Binding resolution order
 
-When a button is pressed, PadIO resolves the action using this priority (highest wins):
+When a button is pressed, PadIO checks combo keys first (if any other buttons are held), then falls back to plain keys:
 
-1. **Top-level `global`** — always wins
-2. **Profile `global`** — profile-wide bindings
-3. **Active mode bindings** — the current mode's mappings
+1. **Combo key in top-level `global`**
+2. **Combo key in profile `global`**
+3. **Combo key in active mode bindings**
+4. **Plain key in top-level `global`**
+5. **Plain key in profile `global`**
+6. **Plain key in active mode bindings**
+
+If multiple buttons are held simultaneously, PadIO tries them in `ButtonID` order and uses the first match.
 
 This means you can set a button in the top-level `global` to guarantee it always does the same thing, while still allowing per-mode overrides for other buttons.

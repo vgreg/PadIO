@@ -90,26 +90,49 @@ struct MappingResolver {
 
     /// Resolves an action for a button press given the active profile and mode.
     ///
-    /// Resolution cascade:
-    /// 1. Top-level config `global` bindings.
-    /// 2. Profile-level `global` bindings.
-    /// 3. Active mode bindings within the profile.
-    func resolve(button: ButtonID, profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> Action? {
+    /// Resolution cascade (combo keys first, then plain keys):
+    /// 1. Combo key in top-level `global`.
+    /// 2. Combo key in profile `global`.
+    /// 3. Combo key in active mode bindings.
+    /// 4. Plain key in top-level `global`.
+    /// 5. Plain key in profile `global`.
+    /// 6. Plain key in active mode bindings.
+    func resolve(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> Action? {
         let key = button.rawValue
 
-        // 1. Top-level global (supersedes everything)
+        // 1–3. Try combo bindings (held modifier + pressed button) through full cascade
+        for modifierID in ButtonID.allCases {
+            guard modifierID != button, heldButtons[modifierID] == true else { continue }
+            let comboKey = "\(modifierID.rawValue)+\(key)"
+
+            if let actionConfig = config.global[comboKey] {
+                return buildAction(from: actionConfig)
+            }
+            if let profile {
+                if let actionConfig = profile.global[comboKey] {
+                    return buildAction(from: actionConfig)
+                }
+                if let modeName = activeMode,
+                   let mode = profile.modes[modeName],
+                   let actionConfig = mode.bindings[comboKey] {
+                    return buildAction(from: actionConfig)
+                }
+            }
+        }
+
+        // 4. Top-level global (supersedes everything)
         if let actionConfig = config.global[key] {
             return buildAction(from: actionConfig)
         }
 
         guard let profile else { return nil }
 
-        // 2. Profile-level global
+        // 5. Profile-level global
         if let actionConfig = profile.global[key] {
             return buildAction(from: actionConfig)
         }
 
-        // 3. Active mode bindings
+        // 6. Active mode bindings
         if let modeName = activeMode,
            let mode = profile.modes[modeName],
            let actionConfig = mode.bindings[key] {

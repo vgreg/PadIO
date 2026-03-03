@@ -52,14 +52,16 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
           "dpad_right": { "type": "keystroke", "key": "right" }
         },
         "nvim": {
-          "A":          { "type": "keystroke", "key": "return" },
-          "B":          { "type": "keystroke", "key": "escape" },
-          "X":          { "type": "keystroke", "key": "u" },
-          "Y":          { "type": "keystroke", "key": "r", "modifiers": ["ctrl"] },
-          "dpad_up":    { "type": "keystroke", "key": "k" },
-          "dpad_down":  { "type": "keystroke", "key": "j" },
-          "dpad_left":  { "type": "keystroke", "key": "h" },
-          "dpad_right": { "type": "keystroke", "key": "l" }
+          "A":            { "type": "keystroke", "key": "return" },
+          "B":            { "type": "keystroke", "key": "escape" },
+          "X":            { "type": "keystroke", "key": "u" },
+          "Y":            { "type": "keystroke", "key": "r", "modifiers": ["ctrl"] },
+          "dpad_up":      { "type": "keystroke", "key": "k" },
+          "dpad_down":    { "type": "keystroke", "key": "j" },
+          "dpad_left":    { "type": "keystroke", "key": "h" },
+          "dpad_right":   { "type": "keystroke", "key": "l" },
+          "X+dpad_up":    { "type": "keystroke", "key": "k", "modifiers": ["ctrl"] },
+          "X+dpad_down":  { "type": "keystroke", "key": "j", "modifiers": ["ctrl"] }
         },
         "tmux": {
           "A": {
@@ -124,6 +126,6 @@ This config:
 - **Default profile**: basic arrow keys, space, escape, media controls
 - **Terminal profile**: activated for Ghostty, Terminal, and iTerm2
     - **shell mode**: return, ctrl-c, ctrl-l, git menu on Y
-    - **nvim mode**: vim-style hjkl navigation
+    - **nvim mode**: vim-style hjkl navigation, with X+dpad combos for ctrl-j/ctrl-k (half-page scroll)
     - **tmux mode**: prefix sequences (ctrl-a + key) for pane navigation
 - **Git menu**: quick terminal commands accessible via Y button in shell mode

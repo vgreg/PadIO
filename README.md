@@ -16,6 +16,7 @@ If you're looking for a friendlier GUI-based controller remapper, search "Game C
 - **Unicode text injection** — emoji, accented characters, CJK, multi-character strings
 - **Multi-step sequences** — fire keystroke chains with configurable delay (e.g., tmux prefix)
 - **Mouse & scroll** — map sticks/dpad to cursor movement and scroll wheel with speed modifiers
+- **Button combos** — hold a modifier button to change what other buttons do (e.g., X+dpad_up)
 - **Per-app profiles** — automatic profile switching based on the frontmost application
 - **Modes** — multiple binding sets per profile, switchable via picker, cycling, or direct jump
 - **Custom menus** — define popup menus with labeled items that trigger any action

@@ -141,7 +141,7 @@ final class ControllerManager: ObservableObject {
                 let pressed = isPressed(buttonID: buttonID, gamepad: gamepad, threshold: threshold)
                 let wasPressed = prev[buttonID] ?? false
                 if pressed && !wasPressed {
-                    handleMappedButton(buttonID)
+                    handleMappedButton(buttonID, heldButtons: prev)
                 }
                 prev[buttonID] = pressed
             }
@@ -218,7 +218,7 @@ final class ControllerManager: ObservableObject {
 
     // MARK: - Input dispatch
 
-    private func handleMappedButton(_ buttonID: ButtonID) {
+    private func handleMappedButton(_ buttonID: ButtonID, heldButtons: [ButtonID: Bool] = [:]) {
         // Let the help overlay consume all input while visible
         if helpOverlay.handleButton(buttonID) {
             return
@@ -259,6 +259,7 @@ final class ControllerManager: ObservableObject {
 
         guard let action = mappingResolver.resolve(
             button: buttonID,
+            heldButtons: heldButtons,
             profile: profile,
             activeMode: modeName,
             config: config
