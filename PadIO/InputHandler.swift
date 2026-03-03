@@ -62,7 +62,7 @@ final class AccessibilityPermission: ObservableObject {
 
 struct InputHandler {
 
-    // MARK: - Keystroke emission
+    // MARK: - Single keystroke
 
     /// Emit a key-down then key-up event for the given virtual key code.
     /// `keyCode` uses Core Graphics virtual key codes (e.g. 0x31 = space).
@@ -83,5 +83,55 @@ struct InputHandler {
         keyUp.post(tap: .cgSessionEventTap)
 
         print("[PadIO] Emitted keystroke: keyCode=0x\(String(keyCode, radix: 16)) flags=\(flags.rawValue)")
+    }
+
+    // MARK: - Key sequence
+
+    /// Emit a sequence of keystrokes with a configurable delay between each step.
+    /// Blocks the calling thread between steps using `usleep` — call from a background context
+    /// if the delay is significant, but the default 50ms is imperceptible on the main thread.
+    func emitSequence(steps: [(keyCode: CGKeyCode, flags: CGEventFlags)], delay: TimeInterval) {
+        for (index, step) in steps.enumerated() {
+            emitKeystroke(keyCode: step.keyCode, flags: step.flags)
+            if index < steps.count - 1 {
+                usleep(UInt32(delay * 1_000_000))
+            }
+        }
+    }
+
+    // MARK: - Media/special keys
+
+    /// Emit a media/special key event (play/pause, volume, brightness, etc.)
+    /// using NX system-defined events. These bypass the normal keystroke path and
+    /// are handled by the media key daemon / Now Playing infrastructure.
+    ///
+    /// `keyType` corresponds to NX_KEYTYPE_* constants (e.g. NX_KEYTYPE_PLAY = 16).
+    func emitMediaKey(keyType: Int32) {
+        // NX system-defined events encode the key type and state in the data1 field:
+        //   bits 31–16: key type
+        //   bits 15–8:  key flags (0x0A = key down, 0x0B = key up)
+        //   bits 7–0:   repeat count (0 for non-repeating)
+        let keyDown: Int = (Int(keyType) << 16) | (0x0A << 8)
+        let keyUp:   Int = (Int(keyType) << 16) | (0x0B << 8)
+
+        func postEvent(data1: Int) {
+            guard let event = NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8,   // NX_SUBTYPE_AUX_CONTROL_BUTTONS
+                data1: data1,
+                data2: -1
+            ) else { return }
+            event.cgEvent?.post(tap: .cgSessionEventTap)
+        }
+
+        postEvent(data1: keyDown)
+        postEvent(data1: keyUp)
+
+        print("[PadIO] Emitted media key: keyType=\(keyType)")
     }
 }

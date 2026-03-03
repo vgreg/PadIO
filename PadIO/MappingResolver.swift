@@ -15,6 +15,10 @@ import CoreGraphics
 enum Action: Sendable {
     /// Emit a synthetic keystroke.
     case keystroke(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// Emit a sequence of synthetic keystrokes with a delay between each.
+    case sequence(steps: [(keyCode: CGKeyCode, flags: CGEventFlags)], delay: TimeInterval)
+    /// Emit a system-defined media/special key event (play/pause, volume, etc.).
+    case mediaKey(keyType: Int32)
     /// Show the mode picker overlay.
     case modeSelect
 }
@@ -79,6 +83,47 @@ struct MappingResolver {
         return nil
     }
 
+    // MARK: - All bindings (for Help HUD)
+
+    /// Collects all effective bindings for the current profile/mode for display in the Help HUD.
+    ///
+    /// Lower-priority sources are listed first; higher-priority bindings for the same button
+    /// overwrite earlier ones, so the final result reflects the actual resolution order.
+    static func allBindings(
+        profile: ProfileConfig?,
+        activeMode: String?,
+        config: MappingConfig
+    ) -> [(button: String, action: String)] {
+        var result: [String: String] = [:]
+
+        // 3. Active mode bindings (lowest priority — add first so higher priority overwrites)
+        if let profile, let modeName = activeMode, let mode = profile.modes[modeName] {
+            for (button, actionConfig) in mode.bindings {
+                if let action = MappingResolver().buildAction(from: actionConfig) {
+                    result[button] = Self.describe(action)
+                }
+            }
+        }
+
+        // 2. Profile-level global (overwrites mode bindings for the same button)
+        if let profile {
+            for (button, actionConfig) in profile.global {
+                if let action = MappingResolver().buildAction(from: actionConfig) {
+                    result[button] = Self.describe(action)
+                }
+            }
+        }
+
+        // 1. Top-level global (highest priority — overwrites all)
+        for (button, actionConfig) in config.global {
+            if let action = MappingResolver().buildAction(from: actionConfig) {
+                result[button] = Self.describe(action)
+            }
+        }
+
+        return result.sorted { $0.key < $1.key }.map { (button: $0.key, action: $0.value) }
+    }
+
     // MARK: - Action building
 
     private func buildAction(from config: ActionConfig) -> Action? {
@@ -88,12 +133,37 @@ struct MappingResolver {
                 print("[PadIO] Keystroke action missing 'key'")
                 return nil
             }
+            // Check if the key name refers to a media/special key
+            if let mediaKeyType = Self.mediaKeyMap[keyName.lowercased()] {
+                return .mediaKey(keyType: mediaKeyType)
+            }
             guard let keyCode = Self.keyCode(for: keyName) else {
                 print("[PadIO] Unknown key name: '\(keyName)'")
                 return nil
             }
             let flags = Self.modifierFlags(for: config.modifiers ?? [])
             return .keystroke(keyCode: keyCode, flags: flags)
+
+        case "sequence":
+            guard let stepConfigs = config.steps, !stepConfigs.isEmpty else {
+                print("[PadIO] Sequence action missing 'steps'")
+                return nil
+            }
+            var steps: [(keyCode: CGKeyCode, flags: CGEventFlags)] = []
+            for step in stepConfigs {
+                guard let keyName = step.key else {
+                    print("[PadIO] Sequence step missing 'key'")
+                    return nil
+                }
+                guard let keyCode = Self.keyCode(for: keyName) else {
+                    print("[PadIO] Unknown key in sequence: '\(keyName)'")
+                    return nil
+                }
+                let flags = Self.modifierFlags(for: step.modifiers ?? [])
+                steps.append((keyCode: keyCode, flags: flags))
+            }
+            let delay = config.delay ?? 0.05
+            return .sequence(steps: steps, delay: delay)
 
         case "mode_select":
             return .modeSelect
@@ -109,17 +179,38 @@ struct MappingResolver {
     static func describe(_ action: Action) -> String {
         switch action {
         case .keystroke(let keyCode, let flags):
-            // Reverse-look up key name for display
-            let keyName = keyCodeMap.first(where: { $0.value == keyCode })?.key ?? "0x\(String(keyCode, radix: 16))"
-            var parts: [String] = [keyName]
-            if flags.contains(.maskCommand)   { parts.insert("cmd", at: 0) }
-            if flags.contains(.maskControl)   { parts.insert("ctrl", at: 0) }
-            if flags.contains(.maskAlternate) { parts.insert("alt", at: 0) }
-            if flags.contains(.maskShift)     { parts.insert("shift", at: 0) }
-            return "keystroke: \(parts.joined(separator: "+"))"
+            return describeKeystroke(keyCode: keyCode, flags: flags)
+
+        case .sequence(let steps, _):
+            let parts = steps.map { describeKeystroke(keyCode: $0.keyCode, flags: $0.flags) }
+            return "sequence: \(parts.joined(separator: " → "))"
+
+        case .mediaKey(let keyType):
+            let name = mediaKeyMap.first(where: { $0.value == keyType })?.key ?? "0x\(String(keyType, radix: 16))"
+            return "media: \(name)"
+
         case .modeSelect:
             return "mode_select"
         }
+    }
+
+    private static func describeKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) -> String {
+        // Reverse-look up key name for display
+        let keyName = keyCodeMap.first(where: { $0.value == keyCode })?.key ?? "0x\(String(keyCode, radix: 16))"
+        // Check for hyper/meh shorthands
+        let isHyper = flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        let isMeh   = !flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        if isHyper { return "hyper+\(keyName)" }
+        if isMeh   { return "meh+\(keyName)" }
+
+        var parts: [String] = [keyName]
+        if flags.contains(.maskCommand)   { parts.insert("cmd", at: 0) }
+        if flags.contains(.maskControl)   { parts.insert("ctrl", at: 0) }
+        if flags.contains(.maskAlternate) { parts.insert("alt", at: 0) }
+        if flags.contains(.maskShift)     { parts.insert("shift", at: 0) }
+        return parts.joined(separator: "+")
     }
 
     // MARK: - Key name → CGKeyCode
@@ -165,6 +256,22 @@ struct MappingResolver {
         "`": 0x32, "-": 0x1B, "=": 0x18,
     ]
 
+    // MARK: - Media key name → NX key type
+
+    /// Maps human-readable media key names to NX system-defined key type constants.
+    /// These are sent as system-defined CGEvents, not regular keystrokes.
+    static let mediaKeyMap: [String: Int32] = [
+        "volume_up":        0,   // NX_KEYTYPE_SOUND_UP
+        "volume_down":      1,   // NX_KEYTYPE_SOUND_DOWN
+        "mute":             7,   // NX_KEYTYPE_MUTE
+        "play_pause":       16,  // NX_KEYTYPE_PLAY
+        "next_track":       17,  // NX_KEYTYPE_NEXT
+        "prev_track":       18,  // NX_KEYTYPE_PREVIOUS
+        "previous_track":   18,  // alias
+        "brightness_up":    21,  // NX_KEYTYPE_BRIGHTNESS_UP
+        "brightness_down":  22,  // NX_KEYTYPE_BRIGHTNESS_DOWN
+    ]
+
     // MARK: - Modifier flags
 
     static func modifierFlags(for names: [String]) -> CGEventFlags {
@@ -175,6 +282,17 @@ struct MappingResolver {
             case "ctrl", "control":  flags.insert(.maskControl)
             case "alt", "option":    flags.insert(.maskAlternate)
             case "shift":            flags.insert(.maskShift)
+            case "hyper":
+                // cmd + ctrl + alt + shift
+                flags.insert(.maskCommand)
+                flags.insert(.maskControl)
+                flags.insert(.maskAlternate)
+                flags.insert(.maskShift)
+            case "meh":
+                // ctrl + alt + shift (no cmd)
+                flags.insert(.maskControl)
+                flags.insert(.maskAlternate)
+                flags.insert(.maskShift)
             default:
                 print("[PadIO] Unknown modifier: '\(name)'")
             }

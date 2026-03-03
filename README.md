@@ -1,0 +1,393 @@
+# PadIO
+
+PadIO is a macOS menu bar daemon that maps Xbox (or any MFi/HID) controller inputs to synthetic keyboard events. It runs in the background with no window, reads a JSON config file, and fires keystrokes to whatever app is in the foreground — even when PadIO itself is not.
+
+## Requirements
+
+- macOS 14.0 (Sonoma) or later
+- **Accessibility permission** — required to post synthetic keyboard events
+- An Xbox Wireless Controller (or any controller recognized by the GameController framework)
+
+## Installation
+
+1. Open `PadIO.xcodeproj` in Xcode.
+2. Build and run (⌘R), or archive and export as a release build.
+3. On first launch, grant Accessibility access when prompted (or open the menu bar icon → **Grant Accessibility Access**).
+
+## Configuration
+
+PadIO reads its config from:
+
+```
+~/.config/padcontrol/config.json
+```
+
+The file is **hot-reloaded** — save changes and they take effect immediately without restarting the app.
+
+If the file does not exist, PadIO runs with no bindings (controller input is silently ignored).
+
+---
+
+## Config File Format
+
+### Top-level structure
+
+```json
+{
+  "trigger_threshold": 0.5,
+  "debug_overlay": false,
+  "global": { },
+  "profiles": { }
+}
+```
+
+| Field               | Type    | Default | Description |
+|---------------------|---------|---------|-------------|
+| `trigger_threshold` | number  | `0.5`   | Analog trigger press threshold (0–1). Values above this are treated as pressed. |
+| `debug_overlay`     | boolean | `false` | Show a floating HUD on every button press displaying the button name and resolved action. Set to `true` during development. |
+| `global`            | object  | `{}`    | Button bindings applied to all profiles. These take priority over everything else. |
+| `profiles`          | object  | `{}`    | Named profiles, each applying to a set of apps. |
+
+### Profiles
+
+```json
+"profiles": {
+  "terminal": {
+    "apps": ["com.mitchellh.ghostty", "com.apple.Terminal"],
+    "default_mode": "shell",
+    "global": {
+      "options": { "type": "mode_select" }
+    },
+    "modes": {
+      "shell": { ... },
+      "nvim": { ... }
+    }
+  },
+  "default": {
+    "apps": [],
+    "default_mode": "general",
+    "global": {},
+    "modes": {
+      "general": { ... }
+    }
+  }
+}
+```
+
+| Field          | Type     | Description |
+|----------------|----------|-------------|
+| `apps`         | string[] | Bundle IDs this profile applies to. Empty list = default catch-all profile. |
+| `default_mode` | string   | Mode to activate when the profile is first entered. |
+| `global`       | object   | Bindings that apply in all modes of this profile. Overridden by top-level `global`. |
+| `modes`        | object   | Named modes, each containing button bindings. |
+
+**Profile resolution order:**
+1. First profile whose `apps` list contains the frontmost app's bundle ID.
+2. The profile named `"default"` (fallback for unmatched apps).
+
+**Binding resolution order (highest priority wins):**
+1. Top-level `global`
+2. Profile `global`
+3. Active mode bindings
+
+### Modes
+
+A mode is a flat object mapping button names to action objects:
+
+```json
+"shell": {
+  "A":          { "type": "keystroke", "key": "return" },
+  "dpad_up":    { "type": "keystroke", "key": "up" },
+  "dpad_down":  { "type": "keystroke", "key": "down" }
+}
+```
+
+---
+
+## Action Types
+
+### `keystroke`
+
+Fires a single synthetic key event.
+
+```json
+{ "type": "keystroke", "key": "space" }
+{ "type": "keystroke", "key": "escape", "modifiers": ["ctrl"] }
+{ "type": "keystroke", "key": "k", "modifiers": ["hyper"] }
+{ "type": "keystroke", "key": "play_pause" }
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `key`       | string   | yes      | Key name (see [Key Names](#key-names) below). |
+| `modifiers` | string[] | no       | Modifier keys to hold while pressing (see [Modifiers](#modifiers)). |
+
+### `mode_select`
+
+Opens the mode picker overlay. Navigate with dpad up/down, confirm with A or RT, cancel with X or LT.
+
+```json
+{ "type": "mode_select" }
+```
+
+Typically bound to the `options` button in a profile's `global` section.
+
+### `sequence`
+
+Fires multiple keystrokes in order, with a configurable delay between each. Useful for terminal prefix sequences (e.g. tmux `ctrl-a` then `n`).
+
+```json
+{
+  "type": "sequence",
+  "steps": [
+    { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+    { "type": "keystroke", "key": "n" }
+  ],
+  "delay": 0.05
+}
+```
+
+| Field   | Type     | Default | Description |
+|---------|----------|---------|-------------|
+| `steps` | array    | —       | Ordered list of `keystroke` action objects. |
+| `delay` | number   | `0.05`  | Seconds to wait between each step (50ms default). |
+
+---
+
+## Key Names
+
+### Letters
+
+`a` `b` `c` `d` `e` `f` `g` `h` `i` `j` `k` `l` `m`
+`n` `o` `p` `q` `r` `s` `t` `u` `v` `w` `x` `y` `z`
+
+### Numbers
+
+`0` `1` `2` `3` `4` `5` `6` `7` `8` `9`
+
+### Special Keys
+
+| Key name        | Key                   |
+|-----------------|-----------------------|
+| `space`         | Space bar             |
+| `return`        | Return / Enter        |
+| `enter`         | Return / Enter        |
+| `tab`           | Tab                   |
+| `escape` / `esc`| Escape                |
+| `delete` / `backspace` | Delete (backspace) |
+| `forwarddelete` | Forward delete        |
+
+### Arrow & Navigation Keys
+
+| Key name    | Key         |
+|-------------|-------------|
+| `up`        | Arrow up    |
+| `down`      | Arrow down  |
+| `left`      | Arrow left  |
+| `right`     | Arrow right |
+| `home`      | Home        |
+| `end`       | End         |
+| `pageup`    | Page up     |
+| `pagedown`  | Page down   |
+
+### Function Keys
+
+`f1` `f2` `f3` `f4` `f5` `f6` `f7` `f8` `f9` `f10` `f11` `f12`
+
+### Punctuation
+
+`` ` `` `-` `=` `[` `]` `\` `;` `'` `,` `.` `/`
+
+### Media / Special Keys
+
+These use the system media key path (no Accessibility permission required).
+
+| Key name           | Action              |
+|--------------------|---------------------|
+| `play_pause`       | Play / Pause        |
+| `next_track`       | Next track          |
+| `prev_track`       | Previous track      |
+| `previous_track`   | Previous track      |
+| `volume_up`        | Volume up           |
+| `volume_down`      | Volume down         |
+| `mute`             | Mute                |
+| `brightness_up`    | Brightness up       |
+| `brightness_down`  | Brightness down     |
+
+---
+
+## Modifiers
+
+| Modifier name       | Keys held                         |
+|---------------------|-----------------------------------|
+| `cmd` / `command`   | Command (⌘)                      |
+| `ctrl` / `control`  | Control (⌃)                      |
+| `alt` / `option`    | Option (⌥)                       |
+| `shift`             | Shift (⇧)                        |
+| `hyper`             | ⌘ + ⌃ + ⌥ + ⇧ (all four)       |
+| `meh`               | ⌃ + ⌥ + ⇧ (everything but ⌘)   |
+
+`hyper` and `meh` are useful for binding controller buttons to app-specific shortcuts that won't conflict with standard system shortcuts.
+
+---
+
+## Button Names
+
+| Button name   | Physical button          |
+|---------------|--------------------------|
+| `A`           | A button                 |
+| `B`           | B button                 |
+| `X`           | X button                 |
+| `Y`           | Y button                 |
+| `LB`          | Left bumper              |
+| `RB`          | Right bumper             |
+| `LT`          | Left trigger             |
+| `RT`          | Right trigger            |
+| `dpad_up`     | D-pad up                 |
+| `dpad_down`   | D-pad down               |
+| `dpad_left`   | D-pad left               |
+| `dpad_right`  | D-pad right              |
+| `L3`          | Left thumbstick click    |
+| `R3`          | Right thumbstick click   |
+| `menu`        | Menu button (≡)          |
+| `options`     | Options / View button    |
+| `share`       | Share button (Xbox Elite) |
+| `paddle1`–`paddle4` | Paddle buttons (Xbox Elite) |
+
+> **Note:** The `menu` button is reserved for the Help HUD (see below) and cannot be rebound via config.
+
+---
+
+## HUDs
+
+### Help HUD (menu button)
+
+Press the **menu (≡)** button at any time to open a floating overlay showing all effective button mappings for the current profile and mode.
+
+- Navigate the list with **dpad up/down**
+- Close with **B**, **X**, or **LT** (or press **menu** again)
+
+The Help HUD takes priority over all other button processing while visible.
+
+### Debug Overlay
+
+When `"debug_overlay": true` is set in the config, a small pill-shaped HUD appears at the bottom of the screen on every button press, showing:
+- Top line: button name (e.g. `A`, `dpad_up`)
+- Bottom line: resolved action (e.g. `ctrl+a → n`, `media: play_pause`, `no mapping`)
+
+The overlay auto-dismisses after 2 seconds. A new press resets the timer immediately.
+
+Set `"debug_overlay": false` (or omit the field) for production use.
+
+---
+
+## Full Example Config
+
+```json
+{
+  "trigger_threshold": 0.5,
+  "debug_overlay": false,
+  "global": {},
+  "profiles": {
+    "default": {
+      "apps": [],
+      "default_mode": "general",
+      "global": {
+        "options": { "type": "mode_select" }
+      },
+      "modes": {
+        "general": {
+          "A":          { "type": "keystroke", "key": "space" },
+          "B":          { "type": "keystroke", "key": "escape" },
+          "dpad_up":    { "type": "keystroke", "key": "up" },
+          "dpad_down":  { "type": "keystroke", "key": "down" },
+          "dpad_left":  { "type": "keystroke", "key": "left" },
+          "dpad_right": { "type": "keystroke", "key": "right" },
+          "LB":         { "type": "keystroke", "key": "play_pause" },
+          "RB":         { "type": "keystroke", "key": "next_track" }
+        }
+      }
+    },
+    "terminal": {
+      "apps": ["com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2"],
+      "default_mode": "shell",
+      "global": {
+        "options": { "type": "mode_select" }
+      },
+      "modes": {
+        "shell": {
+          "A":          { "type": "keystroke", "key": "return" },
+          "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
+          "X":          { "type": "keystroke", "key": "l", "modifiers": ["ctrl"] },
+          "Y":          { "type": "keystroke", "key": "z", "modifiers": ["ctrl"] },
+          "dpad_up":    { "type": "keystroke", "key": "up" },
+          "dpad_down":  { "type": "keystroke", "key": "down" },
+          "dpad_left":  { "type": "keystroke", "key": "left" },
+          "dpad_right": { "type": "keystroke", "key": "right" },
+          "LB":         { "type": "keystroke", "key": "tab", "modifiers": ["shift"] },
+          "RB":         { "type": "keystroke", "key": "tab" }
+        },
+        "nvim": {
+          "A":          { "type": "keystroke", "key": "return" },
+          "B":          { "type": "keystroke", "key": "escape" },
+          "X":          { "type": "keystroke", "key": "u" },
+          "Y":          { "type": "keystroke", "key": "r", "modifiers": ["ctrl"] },
+          "dpad_up":    { "type": "keystroke", "key": "k" },
+          "dpad_down":  { "type": "keystroke", "key": "j" },
+          "dpad_left":  { "type": "keystroke", "key": "h" },
+          "dpad_right": { "type": "keystroke", "key": "l" }
+        },
+        "tmux": {
+          "A": {
+            "type": "sequence",
+            "steps": [
+              { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+              { "type": "keystroke", "key": "return" }
+            ],
+            "delay": 0.05
+          },
+          "dpad_up": {
+            "type": "sequence",
+            "steps": [
+              { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+              { "type": "keystroke", "key": "up" }
+            ]
+          },
+          "dpad_down": {
+            "type": "sequence",
+            "steps": [
+              { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+              { "type": "keystroke", "key": "down" }
+            ]
+          },
+          "dpad_left": {
+            "type": "sequence",
+            "steps": [
+              { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+              { "type": "keystroke", "key": "left" }
+            ]
+          },
+          "dpad_right": {
+            "type": "sequence",
+            "steps": [
+              { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+              { "type": "keystroke", "key": "right" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## Permissions
+
+PadIO requires **Accessibility** permission to post synthetic keyboard events to other applications.
+
+- Open the **PadIO menu bar icon** → **Grant Accessibility Access** to trigger the system prompt.
+- Or go to **System Settings → Privacy & Security → Accessibility** and add PadIO manually.
+
+Media key events (`play_pause`, `next_track`, etc.) do **not** require Accessibility permission.

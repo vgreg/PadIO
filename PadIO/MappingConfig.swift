@@ -15,6 +15,9 @@ import Combine
 struct MappingConfig: Codable, Sendable {
     /// Default trigger axis threshold (0–1). Defaults to 0.5 if omitted.
     var triggerThreshold: Double?
+    /// When true, shows a floating HUD on every button press with the button name and resolved action.
+    /// Defaults to false when omitted. Set to true during development, false for release.
+    var debugOverlay: Bool?
     /// Top-level global bindings applied before any profile lookup.
     var global: [String: ActionConfig]
     /// Named profiles, keyed by profile name (e.g. "default", "terminal").
@@ -22,11 +25,12 @@ struct MappingConfig: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
+        case debugOverlay = "debug_overlay"
         case global
         case profiles
     }
 
-    static let empty = MappingConfig(triggerThreshold: nil, global: [:], profiles: [:])
+    static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:])
 }
 
 /// A profile matches a set of apps by bundle ID and provides per-mode button mappings.
@@ -69,27 +73,33 @@ struct ModeConfig: Codable, Sendable {
 }
 
 /// A single action definition in the config.
-/// Using a class to allow recursive `trigger` nesting for future dual-use support.
+/// Using a class to allow recursive `trigger`/`steps` nesting.
 final class ActionConfig: Codable, Sendable {
-    /// Action type: "keystroke" or "mode_select".
+    /// Action type: "keystroke", "mode_select", or "sequence".
     let type: String
-    /// For "keystroke": the human-readable key name (e.g. "space", "escape", "j").
+    /// For "keystroke": the human-readable key name (e.g. "space", "escape", "j", "play_pause").
     let key: String?
-    /// For "keystroke": modifier keys (e.g. ["ctrl"], ["cmd", "shift"]).
+    /// For "keystroke": modifier keys (e.g. ["ctrl"], ["cmd", "shift"], ["hyper"], ["meh"]).
     let modifiers: [String]?
+    /// For "sequence": ordered list of keystroke steps to fire in succession.
+    let steps: [ActionConfig]?
+    /// For "sequence": delay in seconds between steps. Defaults to 0.05.
+    let delay: Double?
     /// Reserved for future dual-use: action config when button is pressed briefly.
     let trigger: ActionConfig?
     /// Reserved for future dual-use: mode name to hold while button is held.
     let hold: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, key, modifiers, trigger, hold
+        case type, key, modifiers, steps, delay, trigger, hold
     }
 
-    init(type: String, key: String? = nil, modifiers: [String]? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
+    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
         self.type = type
         self.key = key
         self.modifiers = modifiers
+        self.steps = steps
+        self.delay = delay
         self.trigger = trigger
         self.hold = hold
     }

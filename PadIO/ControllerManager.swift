@@ -21,14 +21,12 @@ final class ControllerManager: ObservableObject {
     let configLoader          = ConfigLoader()
     let accessibilityPermission = AccessibilityPermission()
 
-    /// Set to false before release to disable the debug input HUD.
-    static let debugOverlayEnabled = true
-
     private let inputHandler    = InputHandler()
     private let mappingResolver = MappingResolver()
     private var profileModes:   [String: String] = [:]  // profileName → active mode
     private let modePicker      = ModePickerController()
     private let debugOverlay    = DebugInputController()
+    private let helpOverlay     = HelpController()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -139,8 +137,19 @@ final class ControllerManager: ObservableObject {
     // MARK: - Input dispatch
 
     private func handleMappedButton(_ buttonID: ButtonID) {
+        // Let the help overlay consume all input while visible
+        if helpOverlay.handleButton(buttonID) {
+            return
+        }
+
         // Let the mode picker consume the input first when it is visible
         if modePicker.handleButton(buttonID) {
+            return
+        }
+
+        // "menu" button always opens the help HUD
+        if buttonID == .menu {
+            showHelp()
             return
         }
 
@@ -150,7 +159,7 @@ final class ControllerManager: ObservableObject {
         // Resolve which profile matches the current app
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else {
             print("[PadIO] \(buttonID.rawValue) | no profile")
-            if Self.debugOverlayEnabled {
+            if config.debugOverlay ?? false {
                 debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile")
             }
             return
@@ -168,16 +177,41 @@ final class ControllerManager: ObservableObject {
             config: config
         ) else {
             print("[PadIO] No mapping for \(buttonID.rawValue)")
-            if Self.debugOverlayEnabled {
+            if config.debugOverlay ?? false {
                 debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping")
             }
             return
         }
 
-        if Self.debugOverlayEnabled {
+        if config.debugOverlay ?? false {
             debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action))
         }
         executeAction(action, profile: profile, profileName: profileName, currentMode: modeName)
+    }
+
+    private func showHelp() {
+        let config = configLoader.config
+        let bundleID = appObserver.frontmostBundleID
+
+        let profileResult = mappingResolver.resolveProfile(bundleID: bundleID, config: config)
+        let profileName = profileResult?.name ?? "none"
+        let profile = profileResult?.profile
+
+        // Determine the active mode for this profile
+        let modeName: String
+        if let profileResult {
+            modeName = profileModes[profileResult.name] ?? profileResult.profile.defaultMode
+        } else {
+            modeName = "none"
+        }
+
+        let entries = MappingResolver.allBindings(
+            profile: profile,
+            activeMode: modeName,
+            config: config
+        )
+
+        helpOverlay.show(profileName: profileName, modeName: modeName, entries: entries)
     }
 
     private func executeAction(
@@ -193,6 +227,17 @@ final class ControllerManager: ObservableObject {
                 return
             }
             inputHandler.emitKeystroke(keyCode: keyCode, flags: flags)
+
+        case .sequence(let steps, let delay):
+            guard accessibilityPermission.isGranted else {
+                print("[PadIO] Accessibility permission not granted — cannot emit keystrokes.")
+                return
+            }
+            inputHandler.emitSequence(steps: steps, delay: delay)
+
+        case .mediaKey(let keyType):
+            // Media keys do not require Accessibility permission
+            inputHandler.emitMediaKey(keyType: keyType)
 
         case .modeSelect:
             let modes = Array(profile.modes.keys.sorted())
