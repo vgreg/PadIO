@@ -223,7 +223,7 @@ final class ControllerManager: ObservableObject {
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else {
             print("[PadIO] \(buttonID.rawValue) | no profile")
             if config.debugOverlay ?? false {
-                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile")
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile", postEventAccess: CGPreflightPostEventAccess())
             }
             return
         }
@@ -241,13 +241,13 @@ final class ControllerManager: ObservableObject {
         ) else {
             print("[PadIO] No mapping for \(buttonID.rawValue)")
             if config.debugOverlay ?? false {
-                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping")
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping", postEventAccess: CGPreflightPostEventAccess())
             }
             return
         }
 
         if config.debugOverlay ?? false {
-            debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action))
+            debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action), postEventAccess: CGPreflightPostEventAccess())
         }
         executeAction(action, profile: profile, profileName: profileName, currentMode: modeName)
     }

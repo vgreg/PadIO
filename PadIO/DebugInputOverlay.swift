@@ -27,12 +27,15 @@ struct DebugInputView: View {
             Text(viewModel.buttonName)
                 .font(.system(size: 51, weight: .bold, design: .monospaced))
                 .foregroundStyle(.primary)
+                .fixedSize(horizontal: true, vertical: false)
             Text(viewModel.actionDescription)
                 .font(.system(size: 36, weight: .regular, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, 42)
         .padding(.vertical, 30)
+        .fixedSize()
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         .overlay(
@@ -52,7 +55,7 @@ final class DebugInputController {
 
     // MARK: - Show
 
-    func show(button: String, actionDescription: String) {
+    func show(button: String, actionDescription: String, postEventAccess: Bool = true) {
         viewModel.buttonName = button
         viewModel.actionDescription = actionDescription
 
