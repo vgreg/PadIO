@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A2CC8D892F57662A000602D0 /* ModeNotificationOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2CC8D882F57662A000602D0 /* ModeNotificationOverlay.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A2CC8D642F56222D000602D0 /* PadIO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PadIO.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2CC8D882F57662A000602D0 /* ModeNotificationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeNotificationOverlay.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +39,7 @@
 			children = (
 				A2CC8D662F56222D000602D0 /* PadIO */,
 				A2CC8D652F56222D000602D0 /* Products */,
+				A2CC8D882F57662A000602D0 /* ModeNotificationOverlay.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -119,6 +125,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A2CC8D892F57662A000602D0 /* ModeNotificationOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

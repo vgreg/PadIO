@@ -95,6 +95,10 @@ final class ActionConfig: Codable, Sendable {
     let xInverted: Bool?
     /// For "mouse_move" / "scroll": invert the Y axis.
     let yInverted: Bool?
+    /// For "mouse_move" / "scroll": ButtonID rawValue of a button that acts as a speed modifier when held.
+    let modifier: String?
+    /// For "mouse_move" / "scroll": speed multiplier applied when the modifier button is held. Defaults to 2.0.
+    let modifierSpeed: Double?
     /// Reserved for future dual-use: action config when button is pressed briefly.
     let trigger: ActionConfig?
     /// Reserved for future dual-use: mode name to hold while button is held.
@@ -107,10 +111,12 @@ final class ActionConfig: Codable, Sendable {
         case ySpeed = "y_speed"
         case xInverted = "x_inverted"
         case yInverted = "y_inverted"
+        case modifier
+        case modifierSpeed = "modifier_speed"
         case trigger, hold
     }
 
-    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
+    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, modifier: String? = nil, modifierSpeed: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil) {
         self.type = type
         self.key = key
         self.modifiers = modifiers
@@ -121,6 +127,8 @@ final class ActionConfig: Codable, Sendable {
         self.ySpeed = ySpeed
         self.xInverted = xInverted
         self.yInverted = yInverted
+        self.modifier = modifier
+        self.modifierSpeed = modifierSpeed
         self.trigger = trigger
         self.hold = hold
     }

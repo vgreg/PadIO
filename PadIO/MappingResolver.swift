@@ -23,6 +23,12 @@ enum Action: Sendable {
     case textInput(text: String)
     /// Show the mode picker overlay.
     case modeSelect
+    /// Switch to the previous mode in the sorted list of modes for the current profile.
+    case prevMode
+    /// Switch to the next mode in the sorted list of modes for the current profile.
+    case nextMode
+    /// Switch directly to the named mode.
+    case setMode(name: String)
     /// Emit a left mouse button click at the current cursor position.
     case leftClick
     /// Emit a right mouse button click at the current cursor position.
@@ -39,6 +45,10 @@ struct AxisMapping: Sendable {
     let ySpeed: CGFloat
     let xInverted: Bool
     let yInverted: Bool
+    /// ButtonID of a button that, when held, applies `modifierMultiplier` to the speed.
+    let modifierButton: ButtonID?
+    /// Speed multiplier applied when `modifierButton` is held. Defaults to 2.0.
+    let modifierMultiplier: CGFloat
 }
 
 // MARK: - Resolver
@@ -144,12 +154,16 @@ struct MappingResolver {
         let base = CGFloat(config.speed ?? Double(defaultSpeed))
         let xSpeed = CGFloat(config.xSpeed.map { CGFloat($0) } ?? base)
         let ySpeed = CGFloat(config.ySpeed.map { CGFloat($0) } ?? base)
+        let modifierButton = config.modifier.flatMap { ButtonID(rawValue: $0) }
+        let modifierMultiplier = CGFloat(config.modifierSpeed ?? 2.0)
         return AxisMapping(
             kind: kind,
             xSpeed: xSpeed,
             ySpeed: ySpeed,
             xInverted: config.xInverted ?? false,
-            yInverted: config.yInverted ?? false
+            yInverted: config.yInverted ?? false,
+            modifierButton: modifierButton,
+            modifierMultiplier: modifierMultiplier
         )
     }
 
@@ -245,6 +259,20 @@ struct MappingResolver {
         case "mode_select":
             return .modeSelect
 
+        case "prev_mode":
+            return .prevMode
+
+        case "next_mode":
+            return .nextMode
+
+        case _ where config.type.hasPrefix("mode:"):
+            let name = String(config.type.dropFirst("mode:".count))
+            guard !name.isEmpty else {
+                print("[PadIO] mode: action missing mode name")
+                return nil
+            }
+            return .setMode(name: name)
+
         case "left_click":
             return .leftClick
 
@@ -283,6 +311,15 @@ struct MappingResolver {
 
         case .modeSelect:
             return "mode_select"
+
+        case .prevMode:
+            return "prev_mode"
+
+        case .nextMode:
+            return "next_mode"
+
+        case .setMode(let name):
+            return "mode:\(name)"
 
         case .leftClick:
             return "left_click"

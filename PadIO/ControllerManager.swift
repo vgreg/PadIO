@@ -24,9 +24,10 @@ final class ControllerManager: ObservableObject {
     private let inputHandler    = InputHandler()
     private let mappingResolver = MappingResolver()
     private var profileModes:   [String: String] = [:]  // profileName → active mode
-    private let modePicker      = ModePickerController()
-    private let debugOverlay    = DebugInputController()
-    private let helpOverlay     = HelpController()
+    private let modePicker          = ModePickerController()
+    private let debugOverlay        = DebugInputController()
+    private let helpOverlay         = HelpController()
+    private let modeNotification    = ModeNotificationController()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -138,12 +139,12 @@ final class ControllerManager: ObservableObject {
 
             // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
             guard !helpOverlay.isVisible && !modePicker.isVisible else { continue }
-            pollAxes(gamepad: gamepad)
+            pollAxes(gamepad: gamepad, heldButtons: prev)
         }
     }
 
     /// Read and dispatch any active axis-to-pointer mappings for this tick.
-    private func pollAxes(gamepad: GCExtendedGamepad) {
+    private func pollAxes(gamepad: GCExtendedGamepad, heldButtons: [ButtonID: Bool]) {
         let config = configLoader.config
         let bundleID = appObserver.frontmostBundleID
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else { return }
@@ -164,11 +165,19 @@ final class ControllerManager: ObservableObject {
             let y = abs(rawY) > Self.axisDeadzone ? rawY : 0
             guard x != 0 || y != 0 else { continue }
 
-            // Compute per-tick pixel delta: axis * speed * inversionSign / tickRate
+            // Apply modifier multiplier when the modifier button is held
+            let modMult: CGFloat
+            if let modBtn = mapping.modifierButton, heldButtons[modBtn] == true {
+                modMult = mapping.modifierMultiplier
+            } else {
+                modMult = 1.0
+            }
+
+            // Compute per-tick pixel delta: axis * speed * modMult * inversionSign
             let xSign: CGFloat = mapping.xInverted ? -1 : 1
             let ySign: CGFloat = mapping.yInverted ? -1 : 1
-            let dx = CGFloat(x) * mapping.xSpeed * xSign
-            let dy = CGFloat(y) * mapping.ySpeed * ySign
+            let dx = CGFloat(x) * mapping.xSpeed * modMult * xSign
+            let dy = CGFloat(y) * mapping.ySpeed * modMult * ySign
 
             switch mapping.kind {
             case .mouseMove:
@@ -322,12 +331,40 @@ final class ControllerManager: ObservableObject {
                 print("[PadIO] Mode changed to '\(selectedMode)' in profile '\(profileName)'")
             }
 
+        case .prevMode:
+            let modes = profile.modes.keys.sorted()
+            guard !modes.isEmpty else { return }
+            let idx = modes.firstIndex(of: currentMode) ?? 0
+            let newMode = modes[(idx - 1 + modes.count) % modes.count]
+            switchMode(newMode, profileName: profileName)
+
+        case .nextMode:
+            let modes = profile.modes.keys.sorted()
+            guard !modes.isEmpty else { return }
+            let idx = modes.firstIndex(of: currentMode) ?? 0
+            let newMode = modes[(idx + 1) % modes.count]
+            switchMode(newMode, profileName: profileName)
+
+        case .setMode(let name):
+            guard profile.modes[name] != nil else {
+                print("[PadIO] setMode: unknown mode '\(name)' in profile '\(profileName)'")
+                return
+            }
+            switchMode(name, profileName: profileName)
+
         case .leftClick:
             inputHandler.emitMouseClick(button: .left)
 
         case .rightClick:
             inputHandler.emitMouseClick(button: .right)
         }
+    }
+
+    private func switchMode(_ modeName: String, profileName: String) {
+        profileModes[profileName] = modeName
+        activeModeName = modeName
+        modeNotification.show(modeName: modeName)
+        print("[PadIO] Mode changed to '\(modeName)' in profile '\(profileName)'")
     }
 
     // MARK: - Press detection

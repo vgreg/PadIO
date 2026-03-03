@@ -2,7 +2,7 @@
   "trigger_threshold": 0.5,
   "debug_overlay": true,
   "global": {
-    "left_stick":  { "type": "mouse_move", "speed": 15 },
+    "left_stick":  { "type": "mouse_move", "speed": 15, "modifier": "RB", "modifier_speed": 3 },
     "right_stick": { "type": "scroll", "speed": 3, "y_inverted": true },
     "L3":          { "type": "left_click" },
     "R3":          { "type": "right_click" }
@@ -31,7 +31,9 @@
       "apps": ["com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2"],
       "default_mode": "shell",
       "global": {
-        "options": { "type": "mode_select" }
+        "options": { "type": "mode_select" },
+        "LB":      { "type": "prev_mode" },
+        "RB":      { "type": "next_mode" }
       },
       "modes": {
         "shell": {
@@ -42,9 +44,7 @@
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
-          "dpad_right": { "type": "keystroke", "key": "right" },
-          "LB":         { "type": "keystroke", "key": "tab", "modifiers": ["shift"] },
-          "RB":         { "type": "keystroke", "key": "tab" }
+          "dpad_right": { "type": "keystroke", "key": "right" }
         },
         "nvim": {
           "A":          { "type": "keystroke", "key": "return" },
