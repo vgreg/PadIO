@@ -2,8 +2,6 @@
 
 PadIO is a macOS menu bar daemon that maps game controller inputs to synthetic keyboard events, mouse movement, and more. It runs in the background with no window, reads a JSON config file, and fires keystrokes to whatever app is in the foreground — even when PadIO itself is not. Works with Xbox, PlayStation (DualShock 4, DualSense), Nintendo Switch Pro, and any MFi controller recognized by macOS.
 
-**[Full documentation →](https://www.vincentgregoire.com/PadIO)**
-
 ## Who is it for?
 
 PadIO is for users who want **maximum control** over their controller mappings. It's config-file driven and designed for power users who want to define exactly what every button does — including multi-keystroke sequences (e.g., tmux prefix commands), per-app profiles, mode switching, and custom menus.
@@ -25,20 +23,13 @@ If you're looking for a friendlier GUI-based controller remapper, search "Game C
 - **Help HUD** — press the menu button anytime to see all current bindings
 - **Debug overlay** — optional HUD showing every button press and its resolved action
 
-## Installation
-
-### Homebrew (recommended)
+## Quick install
 
 ```bash
 brew install --cask vgreg/tap/padio
 ```
 
-### Build from source
-
-1. Clone the repo and open `PadIO.xcodeproj` in Xcode.
-2. Build and run (⌘R), or archive and export a release build.
-
-See the [Installation guide](https://www.vincentgregoire.com/PadIO/installation/) for details.
+Or [build from source](installation.md#build-from-source).
 
 ## Quick start
 
@@ -63,16 +54,4 @@ Create `~/.config/padio/config.json`:
 }
 ```
 
-Launch PadIO and grant Accessibility access when prompted. The config file is hot-reloaded — save changes and they take effect immediately.
-
-See the [Getting Started guide](https://www.vincentgregoire.com/PadIO/getting-started/) and the [full example config](https://www.vincentgregoire.com/PadIO/example-config/) for more.
-
-## Requirements
-
-- macOS 14.0 (Sonoma) or later
-- **Accessibility permission** — required to post synthetic keyboard events
-- A game controller recognized by macOS (Xbox, PlayStation, Nintendo Switch Pro, or any MFi controller)
-
-## License
-
-[MIT](LICENSE)
+Launch PadIO, grant Accessibility access, and press buttons. See [Getting Started](getting-started.md) for a full walkthrough.

@@ -1,0 +1,60 @@
+site_name: PadIO
+site_url: https://www.vincentgregoire.com/PadIO
+site_description: macOS menu bar daemon that maps game controller inputs to keyboard and mouse
+repo_url: https://github.com/vgreg/PadIO
+repo_name: vgreg/PadIO
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Getting Started: getting-started.md
+  - Configuration:
+    - Overview: configuration/index.md
+    - Profiles & Modes: configuration/profiles.md
+    - Actions: configuration/actions.md
+    - Custom Menus: configuration/menus.md
+    - Haptics: configuration/haptics.md
+  - Reference:
+    - Key Names: reference/key-names.md
+    - Modifiers: reference/modifiers.md
+    - Button Names: reference/button-names.md
+    - Axis Sources: reference/axis-sources.md
+    - Controller Compatibility: reference/controllers.md
+  - HUDs: huds.md
+  - Permissions: permissions.md
+  - Example Config: example-config.md
