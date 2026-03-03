@@ -378,6 +378,12 @@ final class ControllerManager: ObservableObject {
 
         case .rightClick:
             inputHandler.emitMouseClick(button: .right)
+
+        case .keyboardViewer:
+            inputHandler.toggleKeyboardViewer()
+
+        case .nextInputSource:
+            inputHandler.cycleToNextInputSource()
         }
     }
 

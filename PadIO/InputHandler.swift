@@ -9,6 +9,7 @@
 import Foundation
 import CoreGraphics
 import AppKit
+import Carbon
 import Combine
 
 // MARK: - Permission tracker
@@ -232,5 +233,79 @@ struct InputHandler {
         up.post(tap: .cgSessionEventTap)
 
         print("[PadIO] Emitted mouse click: \(button == .left ? "left" : "right")")
+    }
+
+    // MARK: - Keyboard Viewer
+
+    /// Toggle the macOS Keyboard Viewer floating palette on or off.
+    /// Uses the Carbon TextInputSources API — no Accessibility permission required.
+    func toggleKeyboardViewer() {
+        // Find the Keyboard Viewer pseudo-input-source
+        let filter = [kTISPropertyInputSourceType: kTISTypeKeyboardViewer] as CFDictionary
+        guard
+            let cfList = TISCreateInputSourceList(filter, false)?.takeRetainedValue(),
+            let sources = cfList as? [TISInputSource],
+            let viewer = sources.first
+        else {
+            print("[PadIO] Keyboard Viewer input source not found")
+            return
+        }
+
+        // Read the current selected state
+        let isSelected: Bool
+        if let ptr = TISGetInputSourceProperty(viewer, kTISPropertyInputSourceIsSelected) {
+            isSelected = CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(ptr).takeUnretainedValue())
+        } else {
+            isSelected = false
+        }
+
+        if isSelected {
+            TISDeselectInputSource(viewer)
+            print("[PadIO] Keyboard Viewer hidden")
+        } else {
+            TISSelectInputSource(viewer)
+            print("[PadIO] Keyboard Viewer shown")
+        }
+    }
+
+    // MARK: - Input source cycling
+
+    /// Cycle to the next enabled keyboard input source (language/layout).
+    /// Uses the Carbon TextInputSources API — no Accessibility permission required.
+    func cycleToNextInputSource() {
+        // List all selectable keyboard input sources
+        let filter = [kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource] as CFDictionary
+        guard
+            let cfList = TISCreateInputSourceList(filter, false)?.takeRetainedValue(),
+            let allSources = cfList as? [TISInputSource]
+        else {
+            print("[PadIO] Could not list input sources")
+            return
+        }
+
+        // Keep only sources that can actually be selected (excludes keyboard viewers, etc.)
+        let selectable = allSources.filter { source in
+            guard let ptr = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsSelectCapable) else { return false }
+            return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(ptr).takeUnretainedValue())
+        }
+        guard !selectable.isEmpty else { return }
+
+        // Find the current source by comparing input source IDs
+        guard let current = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
+        let currentID = TISGetInputSourceProperty(current, kTISPropertyInputSourceID)
+            .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String }
+
+        let currentIndex = selectable.firstIndex { source in
+            guard let ptr = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { return false }
+            let id = Unmanaged<CFString>.fromOpaque(ptr).takeUnretainedValue() as String
+            return id == currentID
+        } ?? 0
+
+        let nextSource = selectable[(currentIndex + 1) % selectable.count]
+        TISSelectInputSource(nextSource)
+
+        let nextID = TISGetInputSourceProperty(nextSource, kTISPropertyInputSourceID)
+            .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? "unknown"
+        print("[PadIO] Switched input source to: \(nextID)")
     }
 }

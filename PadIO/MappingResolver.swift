@@ -35,6 +35,10 @@ enum Action: Sendable {
     case leftClick
     /// Emit a right mouse button click at the current cursor position.
     case rightClick
+    /// Toggle the macOS Keyboard Viewer floating palette.
+    case keyboardViewer
+    /// Cycle to the next enabled keyboard input source (language/layout).
+    case nextInputSource
 }
 
 // MARK: - Axis mapping
@@ -293,6 +297,12 @@ struct MappingResolver {
         case "right_click":
             return .rightClick
 
+        case "keyboard_viewer":
+            return .keyboardViewer
+
+        case "next_input_source":
+            return .nextInputSource
+
         case "mouse_move", "scroll":
             // Axis-only types; not dispatched as one-shot Actions from the button pipeline.
             return nil
@@ -343,6 +353,12 @@ struct MappingResolver {
 
         case .rightClick:
             return "right_click"
+
+        case .keyboardViewer:
+            return "keyboard_viewer"
+
+        case .nextInputSource:
+            return "next_input_source"
         }
     }
 
