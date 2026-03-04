@@ -1,10 +1,21 @@
 {
   "trigger_threshold": 0.5,
   "debug_overlay": true,
+  "aliases": {
+    "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] }
+  },
+  "shared_modes": {
+    "media": {
+      "LB":         { "type": "keystroke", "key": "play_pause" },
+      "RB":         { "type": "keystroke", "key": "next_track" },
+      "dpad_up":    { "type": "keystroke", "key": "volume_up" },
+      "dpad_down":  { "type": "keystroke", "key": "volume_down" }
+    }
+  },
   "global": {
     "left_stick":  { "type": "mouse_move", "speed": 15, "modifier": "RB", "modifier_speed": 3 },
     "right_stick": { "type": "scroll", "speed": 3, "y_inverted": true },
-    "L3":          { "type": "left_click" },
+    "L3":          { "type": "left_click", "hold": { "type": "left_click_hold" } },
     "R3":          { "type": "right_click" }
   },
   "profiles": {
@@ -21,9 +32,7 @@
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
-          "dpad_right": { "type": "keystroke", "key": "right" },
-          "LB":         { "type": "keystroke", "key": "play_pause" },
-          "RB":         { "type": "keystroke", "key": "next_track" }
+          "dpad_right": { "type": "keystroke", "key": "right" }
         }
       }
     },
@@ -40,7 +49,7 @@
           "A":          { "type": "keystroke", "key": "return" },
           "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
           "X":          { "type": "keystroke", "key": "l", "modifiers": ["ctrl"] },
-          "Y":          { "type": "menu:git" },
+          "Y":          { "type": "menu", "name": "git" },
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },

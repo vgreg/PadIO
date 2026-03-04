@@ -41,6 +41,18 @@ enum Action: Sendable {
     case nextInputSource
     /// Fire a haptic rumble on all connected controllers.
     case rumble(intensity: Double, sharpness: Double, duration: Double)
+    /// Hold left mouse button down (for drag operations).
+    case leftClickHold
+    /// Release left mouse button.
+    case leftClickRelease
+    /// Hold right mouse button down.
+    case rightClickHold
+    /// Release right mouse button.
+    case rightClickRelease
+    /// Press a key down without releasing.
+    case keyDown(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// Release a previously held key.
+    case keyUp(keyCode: CGKeyCode, flags: CGEventFlags)
 }
 
 // MARK: - Axis mapping
@@ -106,37 +118,37 @@ struct MappingResolver {
             let comboKey = "\(modifierID.rawValue)+\(key)"
 
             if let actionConfig = config.global[comboKey] {
-                return buildAction(from: actionConfig)
+                return buildAction(from: actionConfig, mappingConfig: config)
             }
             if let profile {
                 if let actionConfig = profile.global[comboKey] {
-                    return buildAction(from: actionConfig)
+                    return buildAction(from: actionConfig, mappingConfig: config)
                 }
                 if let modeName = activeMode,
-                   let mode = profile.modes[modeName],
+                   let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
                    let actionConfig = mode.bindings[comboKey] {
-                    return buildAction(from: actionConfig)
+                    return buildAction(from: actionConfig, mappingConfig: config)
                 }
             }
         }
 
         // 4. Top-level global (supersedes everything)
         if let actionConfig = config.global[key] {
-            return buildAction(from: actionConfig)
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
 
         guard let profile else { return nil }
 
         // 5. Profile-level global
         if let actionConfig = profile.global[key] {
-            return buildAction(from: actionConfig)
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
 
-        // 6. Active mode bindings
+        // 6. Active mode bindings (profile modes, then shared modes)
         if let modeName = activeMode,
-           let mode = profile.modes[modeName],
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let actionConfig = mode.bindings[key] {
-            return buildAction(from: actionConfig)
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
 
         return nil
@@ -161,7 +173,7 @@ struct MappingResolver {
         }
 
         if let modeName = activeMode,
-           let mode = profile.modes[modeName],
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let actionConfig = mode.bindings[key] {
             return buildAxisMapping(from: actionConfig)
         }
@@ -210,11 +222,14 @@ struct MappingResolver {
         config: MappingConfig
     ) -> [(button: String, action: String)] {
         var result: [String: String] = [:]
+        let resolver = MappingResolver()
 
         // 3. Active mode bindings (lowest priority — add first so higher priority overwrites)
-        if let profile, let modeName = activeMode, let mode = profile.modes[modeName] {
+        // Check profile modes first, then shared modes
+        if let profile, let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]) {
             for (button, actionConfig) in mode.bindings {
-                if let action = MappingResolver().buildAction(from: actionConfig) {
+                if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
                     result[button] = Self.describe(action)
                 }
             }
@@ -223,7 +238,7 @@ struct MappingResolver {
         // 2. Profile-level global (overwrites mode bindings for the same button)
         if let profile {
             for (button, actionConfig) in profile.global {
-                if let action = MappingResolver().buildAction(from: actionConfig) {
+                if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
                     result[button] = Self.describe(action)
                 }
             }
@@ -231,7 +246,7 @@ struct MappingResolver {
 
         // 1. Top-level global (highest priority — overwrites all)
         for (button, actionConfig) in config.global {
-            if let action = MappingResolver().buildAction(from: actionConfig) {
+            if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
                 result[button] = Self.describe(action)
             }
         }
@@ -241,11 +256,36 @@ struct MappingResolver {
 
     // MARK: - Action building
 
-    func buildActionPublic(from config: ActionConfig) -> Action? {
-        buildAction(from: config)
+    func buildActionPublic(from config: ActionConfig, mappingConfig: MappingConfig? = nil) -> Action? {
+        buildAction(from: config, mappingConfig: mappingConfig)
     }
 
-    private func buildAction(from config: ActionConfig) -> Action? {
+    /// Resolves the raw ActionConfig for a button using the same cascade as resolve(),
+    /// but returns the config itself (needed to inspect the `hold` field).
+    func resolveActionConfig(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> ActionConfig? {
+        let key = button.rawValue
+
+        for modifierID in ButtonID.allCases {
+            guard modifierID != button, heldButtons[modifierID] == true else { continue }
+            let comboKey = "\(modifierID.rawValue)+\(key)"
+            if let ac = config.global[comboKey] { return ac }
+            if let profile {
+                if let ac = profile.global[comboKey] { return ac }
+                if let modeName = activeMode,
+                   let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+                   let ac = mode.bindings[comboKey] { return ac }
+            }
+        }
+        if let ac = config.global[key] { return ac }
+        guard let profile else { return nil }
+        if let ac = profile.global[key] { return ac }
+        if let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+           let ac = mode.bindings[key] { return ac }
+        return nil
+    }
+
+    private func buildAction(from config: ActionConfig, mappingConfig: MappingConfig? = nil) -> Action? {
         switch config.type {
         case "keystroke":
             guard let keyName = config.key else {
@@ -308,6 +348,13 @@ struct MappingResolver {
             }
             return .setMode(name: name)
 
+        case "menu":
+            guard let name = config.name, !name.isEmpty else {
+                print("[PadIO] menu action missing 'name'")
+                return nil
+            }
+            return .openMenu(name: name)
+
         case _ where config.type.hasPrefix("menu:"):
             let name = String(config.type.dropFirst("menu:".count))
             guard !name.isEmpty else {
@@ -316,11 +363,33 @@ struct MappingResolver {
             }
             return .openMenu(name: name)
 
+        case "alias":
+            guard let name = config.name, !name.isEmpty else {
+                print("[PadIO] alias action missing 'name'")
+                return nil
+            }
+            guard let aliasConfig = mappingConfig?.aliases?[name] else {
+                print("[PadIO] Unknown alias: '\(name)'")
+                return nil
+            }
+            // Prevent alias chaining
+            guard aliasConfig.type != "alias" else {
+                print("[PadIO] Alias '\(name)' cannot reference another alias")
+                return nil
+            }
+            return buildAction(from: aliasConfig, mappingConfig: mappingConfig)
+
         case "left_click":
             return .leftClick
 
         case "right_click":
             return .rightClick
+
+        case "left_click_hold":
+            return .leftClickHold
+
+        case "right_click_hold":
+            return .rightClickHold
 
         case "keyboard_viewer":
             return .keyboardViewer
@@ -393,6 +462,24 @@ struct MappingResolver {
 
         case .rumble(let intensity, _, let duration):
             return "rumble i=\(String(format: "%.1f", intensity)) t=\(String(format: "%.2f", duration))s"
+
+        case .leftClickHold:
+            return "left_click_hold"
+
+        case .leftClickRelease:
+            return "left_click_release"
+
+        case .rightClickHold:
+            return "right_click_hold"
+
+        case .rightClickRelease:
+            return "right_click_release"
+
+        case .keyDown(let keyCode, let flags):
+            return "key_down: \(describeKeystroke(keyCode: keyCode, flags: flags))"
+
+        case .keyUp(let keyCode, let flags):
+            return "key_up: \(describeKeystroke(keyCode: keyCode, flags: flags))"
         }
     }
 

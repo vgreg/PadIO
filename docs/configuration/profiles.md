@@ -40,6 +40,27 @@ A profile is a named set of bindings that applies when specific apps are in the 
 1. First profile whose `apps` list contains the frontmost app's bundle ID.
 2. The profile named `"default"` (fallback for unmatched apps).
 
+## Shared Modes
+
+Modes defined in the top-level `shared_modes` object are available to all profiles without redefinition. Any profile can reference a shared mode by name — it works the same as a profile-defined mode.
+
+```json
+{
+  "shared_modes": {
+    "media": {
+      "LB":         { "type": "keystroke", "key": "play_pause" },
+      "RB":         { "type": "keystroke", "key": "next_track" },
+      "dpad_up":    { "type": "keystroke", "key": "volume_up" },
+      "dpad_down":  { "type": "keystroke", "key": "volume_down" }
+    }
+  }
+}
+```
+
+Now every profile that supports mode switching can switch to `"media"` — the bindings are resolved from `shared_modes` when the active mode name isn't found in the profile's own `modes` dictionary.
+
+If a profile defines a mode with the same name as a shared mode, the profile's mode takes priority.
+
 ## Modes
 
 A mode is a flat object mapping button names to action objects:
