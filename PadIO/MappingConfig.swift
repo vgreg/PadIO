@@ -93,6 +93,10 @@ struct MappingConfig: Codable, Sendable {
     var menus: [String: MenuConfig]
     /// Optional haptic/rumble configuration for system event triggers.
     var haptics: HapticsConfig?
+    /// Reusable action definitions, referenced by `{ "type": "alias", "name": "<key>" }`.
+    var aliases: [String: ActionConfig]?
+    /// Modes shared across profiles — any profile can reference these by name.
+    var sharedModes: [String: ModeConfig]?
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
@@ -101,15 +105,19 @@ struct MappingConfig: Codable, Sendable {
         case profiles
         case menus
         case haptics
+        case aliases
+        case sharedModes = "shared_modes"
     }
 
-    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil) {
+    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil, aliases: [String: ActionConfig]? = nil, sharedModes: [String: ModeConfig]? = nil) {
         self.triggerThreshold = triggerThreshold
         self.debugOverlay = debugOverlay
         self.global = global
         self.profiles = profiles
         self.menus = menus
         self.haptics = haptics
+        self.aliases = aliases
+        self.sharedModes = sharedModes
     }
 
     init(from decoder: Decoder) throws {
@@ -120,6 +128,8 @@ struct MappingConfig: Codable, Sendable {
         profiles         = try container.decode([String: ProfileConfig].self, forKey: .profiles)
         menus            = try container.decodeIfPresent([String: MenuConfig].self, forKey: .menus) ?? [:]
         haptics          = try container.decodeIfPresent(HapticsConfig.self, forKey: .haptics)
+        aliases          = try container.decodeIfPresent([String: ActionConfig].self, forKey: .aliases)
+        sharedModes      = try container.decodeIfPresent([String: ModeConfig].self, forKey: .sharedModes)
     }
 
     static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
@@ -201,8 +211,10 @@ final class ActionConfig: Codable, Sendable {
     let modifierSpeed: Double?
     /// Reserved for future dual-use: action config when button is pressed briefly.
     let trigger: ActionConfig?
-    /// Reserved for future dual-use: mode name to hold while button is held.
-    let hold: String?
+    /// Hold action config — when present, enables press-vs-hold behavior.
+    let hold: ActionConfig?
+    /// For "menu": the menu name (alternative to "menu:<name>" syntax).
+    let name: String?
     /// For "rumble": motor intensity (0.0–1.0). Default 0.5.
     let intensity: Double?
     /// For "rumble": haptic sharpness (0.0–1.0). Default 0.3.
@@ -219,10 +231,11 @@ final class ActionConfig: Codable, Sendable {
         case modifier
         case modifierSpeed = "modifier_speed"
         case trigger, hold
+        case name
         case intensity, sharpness
     }
 
-    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, modifier: String? = nil, modifierSpeed: Double? = nil, trigger: ActionConfig? = nil, hold: String? = nil, intensity: Double? = nil, sharpness: Double? = nil) {
+    init(type: String, key: String? = nil, modifiers: [String]? = nil, steps: [ActionConfig]? = nil, delay: Double? = nil, speed: Double? = nil, xSpeed: Double? = nil, ySpeed: Double? = nil, xInverted: Bool? = nil, yInverted: Bool? = nil, modifier: String? = nil, modifierSpeed: Double? = nil, trigger: ActionConfig? = nil, hold: ActionConfig? = nil, name: String? = nil, intensity: Double? = nil, sharpness: Double? = nil) {
         self.type = type
         self.key = key
         self.modifiers = modifiers
@@ -237,6 +250,7 @@ final class ActionConfig: Codable, Sendable {
         self.modifierSpeed = modifierSpeed
         self.trigger = trigger
         self.hold = hold
+        self.name = name
         self.intensity = intensity
         self.sharpness = sharpness
     }

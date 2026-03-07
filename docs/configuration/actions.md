@@ -91,13 +91,44 @@ Switch directly to a named mode without opening the picker. The mode must exist 
 { "type": "mode:nvim" }
 ```
 
-## `menu:<name>`
+## `menu`
 
 Open a named custom menu overlay (defined in the top-level `menus` object). See [Custom Menus](menus.md).
 
 ```json
-{ "type": "menu:git" }
+{ "type": "menu", "name": "git" }
 ```
+
+| Field  | Type   | Required | Description |
+|--------|--------|----------|-------------|
+| `name` | string | yes      | Name of the menu (must match a key in the top-level `menus` object). |
+
+The legacy syntax `"type": "menu:git"` is still supported for backward compatibility.
+
+## `alias`
+
+Reference a reusable action defined in the top-level `aliases` object.
+
+```json
+{ "type": "alias", "name": "tmux_leader" }
+```
+
+| Field  | Type   | Required | Description |
+|--------|--------|----------|-------------|
+| `name` | string | yes      | Name of the alias (must match a key in the top-level `aliases` object). |
+
+Define aliases at the top level of your config:
+
+```json
+{
+  "aliases": {
+    "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] },
+    "save":        { "type": "keystroke", "key": "s", "modifiers": ["cmd"] }
+  }
+}
+```
+
+Aliases cannot chain — an alias cannot reference another alias.
 
 ## `left_click` / `right_click`
 
@@ -109,6 +140,43 @@ Emit a left or right mouse click at the current cursor position. Requires Access
 ```
 
 Useful bound to thumbstick clicks (`L3`, `R3`) alongside axis-mapped stick movement.
+
+## `left_click_hold` / `right_click_hold`
+
+Hold a mouse button down (for drag operations). Used as hold actions — see [Press vs Hold](#press-vs-hold) below.
+
+```json
+{ "type": "left_click_hold" }
+{ "type": "right_click_hold" }
+```
+
+## `modifier_hold`
+
+Hold modifier keys down using proper `flagsChanged` events. macOS treats these as physically held modifiers until the button is released. Used as a hold action — see [Press vs Hold](#press-vs-hold) below.
+
+```json
+{ "type": "modifier_hold", "modifiers": ["cmd"] }
+{ "type": "modifier_hold", "modifiers": ["ctrl", "shift"] }
+{ "type": "modifier_hold", "modifiers": ["hyper"] }
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `modifiers` | string[] | yes      | Modifier keys to hold (see [Modifiers](../reference/modifiers.md)). Also supports `"globe"` / `"fn"`. |
+
+This enables workflows like the macOS app switcher:
+
+```json
+"LT": {
+  "type": "keystroke", "key": "tab", "modifiers": ["cmd"],
+  "hold": { "type": "modifier_hold", "modifiers": ["cmd"] }
+},
+"LT+dpad_right": { "type": "keystroke", "key": "right" },
+"LT+dpad_left":  { "type": "keystroke", "key": "left" }
+```
+
+- **Tap LT**: Cmd+Tab — quick switch to last app
+- **Hold LT**: holds Cmd down, opening the app switcher. Navigate with dpad arrows (which fire as `LT+dpad_*` combos). Release LT to confirm and release Cmd.
 
 ## `mouse_move`
 
@@ -200,3 +268,33 @@ Fire a one-shot haptic rumble on all connected controllers. Has no effect on con
 | `delay`     | number | `0.2`   | Duration of the rumble in seconds. |
 
 Does not require Accessibility permission.
+
+## Press vs Hold
+
+Any action can distinguish between a quick **tap** and a **hold** by adding a `hold` field. When present, the button enters a state machine:
+
+- **Press:** Starts tracking. No action fires immediately.
+- **Still held after 300ms:** Fires the hold action. For `left_click_hold` / `right_click_hold`, emits mouse-down. For keystrokes, emits key-down only.
+- **Release before 300ms:** Fires the original (tap) action.
+- **Release after hold:** Fires the release counterpart (mouse-up / key-up).
+- **No `hold` field:** Existing behavior — action fires immediately on press.
+
+```json
+"L3": {
+  "type": "left_click",
+  "hold": { "type": "left_click_hold" }
+}
+```
+
+In this example, tapping L3 performs a click. Holding L3 holds the left mouse button down for dragging — moving the stick while holding L3 emits drag events instead of regular mouse-move events. Releasing L3 releases the mouse button.
+
+Keystroke hold example — hold to keep a modifier pressed:
+
+```json
+"A": {
+  "type": "keystroke", "key": "space",
+  "hold": { "type": "keystroke", "key": "shift" }
+}
+```
+
+Tapping A sends space. Holding A holds shift down until released.

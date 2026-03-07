@@ -41,6 +41,24 @@ enum Action: Sendable {
     case nextInputSource
     /// Fire a haptic rumble on all connected controllers.
     case rumble(intensity: Double, sharpness: Double, duration: Double)
+    /// Hold left mouse button down (for drag operations).
+    case leftClickHold
+    /// Release left mouse button.
+    case leftClickRelease
+    /// Hold right mouse button down.
+    case rightClickHold
+    /// Release right mouse button.
+    case rightClickRelease
+    /// Press a key down without releasing.
+    case keyDown(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// Release a previously held key.
+    case keyUp(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// No-op action — does nothing. Used as a tap action when only the hold behavior is wanted.
+    case noop
+    /// Hold modifier keys down via flagsChanged events (e.g., Cmd for app switcher).
+    case modifierHold(flags: CGEventFlags)
+    /// Release held modifier keys via flagsChanged events.
+    case modifierRelease(flags: CGEventFlags)
 }
 
 // MARK: - Axis mapping
@@ -91,12 +109,12 @@ struct MappingResolver {
     /// Resolves an action for a button press given the active profile and mode.
     ///
     /// Resolution cascade (combo keys first, then plain keys):
-    /// 1. Combo key in top-level `global`.
+    /// 1. Combo key in active mode bindings (highest priority).
     /// 2. Combo key in profile `global`.
-    /// 3. Combo key in active mode bindings.
-    /// 4. Plain key in top-level `global`.
+    /// 3. Combo key in top-level `global` (cross-profile defaults).
+    /// 4. Plain key in active mode bindings (highest priority).
     /// 5. Plain key in profile `global`.
-    /// 6. Plain key in active mode bindings.
+    /// 6. Plain key in top-level `global` (cross-profile defaults).
     func resolve(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> Action? {
         let key = button.rawValue
 
@@ -105,38 +123,36 @@ struct MappingResolver {
             guard modifierID != button, heldButtons[modifierID] == true else { continue }
             let comboKey = "\(modifierID.rawValue)+\(key)"
 
-            if let actionConfig = config.global[comboKey] {
-                return buildAction(from: actionConfig)
-            }
             if let profile {
-                if let actionConfig = profile.global[comboKey] {
-                    return buildAction(from: actionConfig)
-                }
                 if let modeName = activeMode,
-                   let mode = profile.modes[modeName],
+                   let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
                    let actionConfig = mode.bindings[comboKey] {
-                    return buildAction(from: actionConfig)
+                    return buildAction(from: actionConfig, mappingConfig: config)
                 }
+                if let actionConfig = profile.global[comboKey] {
+                    return buildAction(from: actionConfig, mappingConfig: config)
+                }
+            }
+            if let actionConfig = config.global[comboKey] {
+                return buildAction(from: actionConfig, mappingConfig: config)
             }
         }
 
-        // 4. Top-level global (supersedes everything)
-        if let actionConfig = config.global[key] {
-            return buildAction(from: actionConfig)
+        // 4. Active mode bindings (highest priority)
+        if let profile, let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+           let actionConfig = mode.bindings[key] {
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
-
-        guard let profile else { return nil }
 
         // 5. Profile-level global
-        if let actionConfig = profile.global[key] {
-            return buildAction(from: actionConfig)
+        if let profile, let actionConfig = profile.global[key] {
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
 
-        // 6. Active mode bindings
-        if let modeName = activeMode,
-           let mode = profile.modes[modeName],
-           let actionConfig = mode.bindings[key] {
-            return buildAction(from: actionConfig)
+        // 6. Top-level global (cross-profile defaults)
+        if let actionConfig = config.global[key] {
+            return buildAction(from: actionConfig, mappingConfig: config)
         }
 
         return nil
@@ -146,23 +162,21 @@ struct MappingResolver {
 
     /// Resolves an axis mapping for a given axis source using the same cascade as button resolution.
     ///
-    /// Resolution order: top-level global → profile global → active mode bindings.
+    /// Resolution order: active mode → profile global → top-level global.
     func resolveAxisMapping(axisID: AxisID, profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> AxisMapping? {
         let key = axisID.rawValue
 
-        if let actionConfig = config.global[key] {
-            return buildAxisMapping(from: actionConfig)
-        }
-
-        guard let profile else { return nil }
-
-        if let actionConfig = profile.global[key] {
-            return buildAxisMapping(from: actionConfig)
-        }
-
-        if let modeName = activeMode,
-           let mode = profile.modes[modeName],
+        if let profile, let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let actionConfig = mode.bindings[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        if let profile, let actionConfig = profile.global[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        if let actionConfig = config.global[key] {
             return buildAxisMapping(from: actionConfig)
         }
 
@@ -210,29 +224,31 @@ struct MappingResolver {
         config: MappingConfig
     ) -> [(button: String, action: String)] {
         var result: [String: String] = [:]
+        let resolver = MappingResolver()
 
-        // 3. Active mode bindings (lowest priority — add first so higher priority overwrites)
-        if let profile, let modeName = activeMode, let mode = profile.modes[modeName] {
-            for (button, actionConfig) in mode.bindings {
-                if let action = MappingResolver().buildAction(from: actionConfig) {
-                    result[button] = Self.describe(action)
-                }
+        // 3. Top-level global (lowest priority — add first so higher priority overwrites)
+        for (button, actionConfig) in config.global {
+            if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
+                result[button] = Self.describe(action)
             }
         }
 
-        // 2. Profile-level global (overwrites mode bindings for the same button)
+        // 2. Profile-level global (overwrites top-level global)
         if let profile {
             for (button, actionConfig) in profile.global {
-                if let action = MappingResolver().buildAction(from: actionConfig) {
+                if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
                     result[button] = Self.describe(action)
                 }
             }
         }
 
-        // 1. Top-level global (highest priority — overwrites all)
-        for (button, actionConfig) in config.global {
-            if let action = MappingResolver().buildAction(from: actionConfig) {
-                result[button] = Self.describe(action)
+        // 1. Active mode bindings (highest priority — overwrites all)
+        if let profile, let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]) {
+            for (button, actionConfig) in mode.bindings {
+                if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
+                    result[button] = Self.describe(action)
+                }
             }
         }
 
@@ -241,11 +257,66 @@ struct MappingResolver {
 
     // MARK: - Action building
 
-    func buildActionPublic(from config: ActionConfig) -> Action? {
-        buildAction(from: config)
+    func buildActionPublic(from config: ActionConfig, mappingConfig: MappingConfig? = nil) -> Action? {
+        buildAction(from: config, mappingConfig: mappingConfig)
     }
 
-    private func buildAction(from config: ActionConfig) -> Action? {
+    /// Resolves the raw ActionConfig for a button using the same cascade as resolve(),
+    /// but returns the config itself (needed to inspect the `hold` field).
+    func resolveActionConfig(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> ActionConfig? {
+        let key = button.rawValue
+
+        for modifierID in ButtonID.allCases {
+            guard modifierID != button, heldButtons[modifierID] == true else { continue }
+            let comboKey = "\(modifierID.rawValue)+\(key)"
+            if let profile {
+                if let modeName = activeMode,
+                   let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+                   let ac = mode.bindings[comboKey] { return ac }
+                if let ac = profile.global[comboKey] { return ac }
+            }
+            if let ac = config.global[comboKey] { return ac }
+        }
+        if let profile, let modeName = activeMode,
+           let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+           let ac = mode.bindings[key] { return ac }
+        if let profile, let ac = profile.global[key] { return ac }
+        if let ac = config.global[key] { return ac }
+        return nil
+    }
+
+    /// Returns all matching ActionConfigs for a button across the full cascade, in priority order.
+    /// Used to merge press and hold from different cascade levels.
+    func resolveAllConfigs(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> [ActionConfig] {
+        let key = button.rawValue
+        var results: [ActionConfig] = []
+
+        // Combo keys (mode → profile global → top global)
+        for modifierID in ButtonID.allCases {
+            guard modifierID != button, heldButtons[modifierID] == true else { continue }
+            let comboKey = "\(modifierID.rawValue)+\(key)"
+            if let profile {
+                if let modeName = activeMode,
+                   let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+                   let ac = mode.bindings[comboKey] { results.append(ac) }
+                if let ac = profile.global[comboKey] { results.append(ac) }
+            }
+            if let ac = config.global[comboKey] { results.append(ac) }
+        }
+
+        // Plain keys (mode → profile global → top global)
+        if let profile {
+            if let modeName = activeMode,
+               let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
+               let ac = mode.bindings[key] { results.append(ac) }
+            if let ac = profile.global[key] { results.append(ac) }
+        }
+        if let ac = config.global[key] { results.append(ac) }
+
+        return results
+    }
+
+    private func buildAction(from config: ActionConfig, mappingConfig: MappingConfig? = nil) -> Action? {
         switch config.type {
         case "keystroke":
             guard let keyName = config.key else {
@@ -308,6 +379,13 @@ struct MappingResolver {
             }
             return .setMode(name: name)
 
+        case "menu":
+            guard let name = config.name, !name.isEmpty else {
+                print("[PadIO] menu action missing 'name'")
+                return nil
+            }
+            return .openMenu(name: name)
+
         case _ where config.type.hasPrefix("menu:"):
             let name = String(config.type.dropFirst("menu:".count))
             guard !name.isEmpty else {
@@ -316,11 +394,41 @@ struct MappingResolver {
             }
             return .openMenu(name: name)
 
+        case "alias":
+            guard let name = config.name, !name.isEmpty else {
+                print("[PadIO] alias action missing 'name'")
+                return nil
+            }
+            guard let aliasConfig = mappingConfig?.aliases?[name] else {
+                print("[PadIO] Unknown alias: '\(name)'")
+                return nil
+            }
+            // Prevent alias chaining
+            guard aliasConfig.type != "alias" else {
+                print("[PadIO] Alias '\(name)' cannot reference another alias")
+                return nil
+            }
+            return buildAction(from: aliasConfig, mappingConfig: mappingConfig)
+
         case "left_click":
             return .leftClick
 
         case "right_click":
             return .rightClick
+
+        case "left_click_hold":
+            return .leftClickHold
+
+        case "right_click_hold":
+            return .rightClickHold
+
+        case "modifier_hold":
+            let flags = Self.modifierFlags(for: config.modifiers ?? [])
+            guard flags != [] else {
+                print("[PadIO] modifier_hold action missing 'modifiers'")
+                return nil
+            }
+            return .modifierHold(flags: flags)
 
         case "keyboard_viewer":
             return .keyboardViewer
@@ -333,6 +441,9 @@ struct MappingResolver {
             let sharpness = config.sharpness ?? 0.3
             let duration  = config.delay     ?? 0.2  // "delay" doubles as duration for rumble
             return .rumble(intensity: intensity, sharpness: sharpness, duration: duration)
+
+        case "none":
+            return .noop
 
         case "mouse_move", "scroll":
             // Axis-only types; not dispatched as one-shot Actions from the button pipeline.
@@ -393,7 +504,51 @@ struct MappingResolver {
 
         case .rumble(let intensity, _, let duration):
             return "rumble i=\(String(format: "%.1f", intensity)) t=\(String(format: "%.2f", duration))s"
+
+        case .leftClickHold:
+            return "left_click_hold"
+
+        case .leftClickRelease:
+            return "left_click_release"
+
+        case .rightClickHold:
+            return "right_click_hold"
+
+        case .rightClickRelease:
+            return "right_click_release"
+
+        case .keyDown(let keyCode, let flags):
+            return "key_down: \(describeKeystroke(keyCode: keyCode, flags: flags))"
+
+        case .keyUp(let keyCode, let flags):
+            return "key_up: \(describeKeystroke(keyCode: keyCode, flags: flags))"
+
+        case .noop:
+            return "none"
+
+        case .modifierHold(let flags):
+            return "modifier_hold: \(describeModifiers(flags))"
+
+        case .modifierRelease(let flags):
+            return "modifier_release: \(describeModifiers(flags))"
         }
+    }
+
+    private static func describeModifiers(_ flags: CGEventFlags) -> String {
+        let isHyper = flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        let isMeh   = !flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        if isHyper { return "hyper" }
+        if isMeh   { return "meh" }
+
+        var parts: [String] = []
+        if flags.contains(.maskCommand)     { parts.append("cmd") }
+        if flags.contains(.maskControl)     { parts.append("ctrl") }
+        if flags.contains(.maskAlternate)   { parts.append("alt") }
+        if flags.contains(.maskShift)       { parts.append("shift") }
+        if flags.contains(.maskSecondaryFn) { parts.append("globe") }
+        return parts.isEmpty ? "none" : parts.joined(separator: "+")
     }
 
     private static func describeKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) -> String {
@@ -526,6 +681,8 @@ struct MappingResolver {
                 flags.insert(.maskControl)
                 flags.insert(.maskAlternate)
                 flags.insert(.maskShift)
+            case "globe", "fn":
+                flags.insert(.maskSecondaryFn)
             default:
                 print("[PadIO] Unknown modifier: '\(name)'")
             }

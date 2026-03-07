@@ -1,15 +1,26 @@
 # Example Config
 
-A complete annotated config demonstrating profiles, modes, sequences, custom menus, and axis mappings.
+A complete annotated config demonstrating profiles, modes, sequences, custom menus, aliases, shared modes, hold actions, and axis mappings.
 
 ```json
 {
   "trigger_threshold": 0.5,
   "debug_overlay": false,
+  "aliases": {
+    "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] }
+  },
+  "shared_modes": {
+    "media": {
+      "LB":         { "type": "keystroke", "key": "play_pause" },
+      "RB":         { "type": "keystroke", "key": "next_track" },
+      "dpad_up":    { "type": "keystroke", "key": "volume_up" },
+      "dpad_down":  { "type": "keystroke", "key": "volume_down" }
+    }
+  },
   "global": {
     "left_stick":  { "type": "mouse_move", "speed": 15, "modifier": "RB", "modifier_speed": 3 },
     "right_stick": { "type": "scroll", "speed": 3, "y_inverted": true },
-    "L3":          { "type": "left_click" },
+    "L3":          { "type": "left_click", "hold": { "type": "left_click_hold" } },
     "R3":          { "type": "right_click" }
   },
   "profiles": {
@@ -26,9 +37,7 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
-          "dpad_right": { "type": "keystroke", "key": "right" },
-          "LB":         { "type": "keystroke", "key": "play_pause" },
-          "RB":         { "type": "keystroke", "key": "next_track" }
+          "dpad_right": { "type": "keystroke", "key": "right" }
         }
       }
     },
@@ -45,7 +54,7 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
           "A":          { "type": "keystroke", "key": "return" },
           "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
           "X":          { "type": "keystroke", "key": "l", "modifiers": ["ctrl"] },
-          "Y":          { "type": "menu:git" },
+          "Y":          { "type": "menu", "name": "git" },
           "dpad_up":    { "type": "keystroke", "key": "up" },
           "dpad_down":  { "type": "keystroke", "key": "down" },
           "dpad_left":  { "type": "keystroke", "key": "left" },
@@ -122,10 +131,13 @@ This config:
 
 - Maps the **left stick** to mouse movement globally, with RB as a speed boost modifier
 - Maps the **right stick** to scrolling globally (inverted Y for natural scroll)
-- **L3/R3** (stick clicks) for left/right click
-- **Default profile**: basic arrow keys, space, escape, media controls
+- **L3** (left stick click) for left click, with **hold for drag** — tap clicks, hold drags
+- **R3** (right stick click) for right click
+- **Aliases**: `tmux_leader` defined once, reusable across bindings
+- **Shared modes**: `media` mode available in all profiles for play/pause, track skip, volume
+- **Default profile**: basic arrow keys, space, escape
 - **Terminal profile**: activated for Ghostty, Terminal, and iTerm2
-    - **shell mode**: return, ctrl-c, ctrl-l, git menu on Y
+    - **shell mode**: return, ctrl-c, ctrl-l, git menu on Y (using `"type": "menu", "name": "git"` syntax)
     - **nvim mode**: vim-style hjkl navigation, with X+dpad combos for ctrl-j/ctrl-k (half-page scroll)
     - **tmux mode**: prefix sequences (ctrl-a + key) for pane navigation
 - **Git menu**: quick terminal commands accessible via Y button in shell mode

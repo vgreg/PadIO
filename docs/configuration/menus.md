@@ -19,8 +19,10 @@ Named menus are defined at the top level of the config under `"menus"`. Each men
 Open it from any binding:
 
 ```json
-"Y": { "type": "menu:git" }
+"Y": { "type": "menu", "name": "git" }
 ```
+
+The legacy syntax `"type": "menu:git"` is also supported.
 
 ## Navigation
 

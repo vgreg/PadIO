@@ -8,6 +8,7 @@ import Foundation
 import Combine
 import GameController
 import CoreGraphics
+import QuartzCore
 
 @MainActor
 final class ControllerManager: ObservableObject {
@@ -108,8 +109,10 @@ final class ControllerManager: ObservableObject {
     }
 
     private func disconnectController(_ controller: GCController) {
+        let id = ObjectIdentifier(controller)
         connectedControllers.removeAll { $0 == controller }
-        previousButtonStates.removeValue(forKey: ObjectIdentifier(controller))
+        previousButtonStates.removeValue(forKey: id)
+        holdStates.removeValue(forKey: id)
         hapticController.controllerDisconnected(controller)
         print("[PadIO] Controller disconnected: \(controller.vendorName ?? "Unknown")")
     }
@@ -122,6 +125,29 @@ final class ControllerManager: ObservableObject {
     /// Minimum axis deflection required to produce mouse/scroll events (eliminates stick drift).
     private static let axisDeadzone: Float = 0.1
 
+    // MARK: - Hold state machine
+
+    /// Duration in seconds a button must be held before the hold action fires.
+    private static let holdThreshold: CFTimeInterval = 0.3
+
+    /// Context captured at the moment a hold-capable button is first pressed.
+    private struct HoldContext {
+        let pressAction: Action
+        let holdAction: Action
+        let profile: ProfileConfig
+        let profileName: String
+        let currentMode: String
+    }
+
+    /// Per-button hold tracking state.
+    private enum HoldState {
+        case pending(pressTime: CFTimeInterval, context: HoldContext)
+        case held(context: HoldContext)
+    }
+
+    /// Active hold states per controller and button.
+    private var holdStates: [ObjectIdentifier: [ButtonID: HoldState]] = [:]
+
     private func startPollingTimer() {
         // Poll at ~60Hz — fast enough to catch quick taps
         Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -131,21 +157,52 @@ final class ControllerManager: ObservableObject {
 
     private func pollControllers() {
         let threshold = Float(configLoader.config.triggerThreshold ?? 0.5)
+        let now = CACurrentMediaTime()
         for controller in GCController.controllers() {
             guard let gamepad = controller.extendedGamepad else { continue }
             let id = ObjectIdentifier(controller)
             var prev = previousButtonStates[id] ?? [:]
+            var holds = holdStates[id] ?? [:]
 
-            // Edge-triggered button dispatch
             for buttonID in ButtonID.allCases {
                 let pressed = isPressed(buttonID: buttonID, gamepad: gamepad, threshold: threshold)
                 let wasPressed = prev[buttonID] ?? false
+
                 if pressed && !wasPressed {
-                    handleMappedButton(buttonID, heldButtons: prev)
+                    // Press edge — check if this binding has a hold action
+                    if let holdConfig = resolveHoldConfig(buttonID: buttonID, heldButtons: prev) {
+                        holds[buttonID] = .pending(pressTime: now, context: holdConfig)
+                    } else {
+                        handleMappedButton(buttonID, heldButtons: prev)
+                    }
+                } else if pressed && wasPressed {
+                    // Still held — check for threshold crossing
+                    if case .pending(let pressTime, let context) = holds[buttonID],
+                       now - pressTime >= Self.holdThreshold {
+                        // Threshold exceeded — fire hold action
+                        let holdAction = convertToHoldAction(context.holdAction)
+                        executeAction(holdAction, profile: context.profile, profileName: context.profileName, currentMode: context.currentMode)
+                        holds[buttonID] = .held(context: context)
+                    }
+                } else if !pressed && wasPressed {
+                    // Release edge — handle hold state
+                    if let holdState = holds[buttonID] {
+                        switch holdState {
+                        case .pending(_, let context):
+                            // Released before threshold — fire the tap (press) action
+                            executeAction(context.pressAction, profile: context.profile, profileName: context.profileName, currentMode: context.currentMode)
+                        case .held(let context):
+                            // Released after hold — fire the release counterpart
+                            let releaseAction = releaseAction(for: context.holdAction)
+                            executeAction(releaseAction, profile: context.profile, profileName: context.profileName, currentMode: context.currentMode)
+                        }
+                        holds.removeValue(forKey: buttonID)
+                    }
                 }
                 prev[buttonID] = pressed
             }
             previousButtonStates[id] = prev
+            holdStates[id] = holds
 
             // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
             guard !helpOverlay.isVisible && !modePicker.isVisible && !customMenu.isVisible else { continue }
@@ -171,9 +228,14 @@ final class ControllerManager: ObservableObject {
             let (rawX, rawY) = readAxisValues(axisID: axisID, gamepad: gamepad)
 
             // Apply deadzone — treat small deflections as zero to suppress stick drift
-            let x = abs(rawX) > Self.axisDeadzone ? rawX : 0
-            let y = abs(rawY) > Self.axisDeadzone ? rawY : 0
-            guard x != 0 || y != 0 else { continue }
+            let deadX = abs(rawX) > Self.axisDeadzone ? rawX : Float(0)
+            let deadY = abs(rawY) > Self.axisDeadzone ? rawY : Float(0)
+            guard deadX != 0 || deadY != 0 else { continue }
+
+            // Apply quadratic response curve: preserves sign, amplifies large inputs,
+            // gives fine control near center while keeping full-deflection speed.
+            let x = deadX * abs(deadX)
+            let y = deadY * abs(deadY)
 
             // Apply modifier multiplier when the modifier button is held
             let modMult: CGFloat
@@ -192,7 +254,11 @@ final class ControllerManager: ObservableObject {
             switch mapping.kind {
             case .mouseMove:
                 // Screen Y axis is flipped: positive stick-Y = up = negative screen-Y
-                inputHandler.emitMouseMove(dx: dx, dy: -dy)
+                if let btn = heldMouseButton() {
+                    inputHandler.emitMouseDrag(dx: dx, dy: -dy, button: btn)
+                } else {
+                    inputHandler.emitMouseMove(dx: dx, dy: -dy)
+                }
                 print("[PadIO] \(axisID.rawValue) | mouse_move dx=\(String(format: "%.1f", dx)) dy=\(String(format: "%.1f", -dy))")
             case .scroll:
                 inputHandler.emitScroll(dx: dx, dy: dy)
@@ -326,10 +392,20 @@ final class ControllerManager: ObservableObject {
     ) {
         switch action {
         case .keystroke(let keyCode, let flags):
-            inputHandler.emitKeystroke(keyCode: keyCode, flags: flags)
+            // Merge any active modifier holds so held modifiers aren't dropped
+            let mergedFlags = flags.union(heldModifierFlags())
+            inputHandler.emitKeystroke(keyCode: keyCode, flags: mergedFlags)
 
         case .sequence(let steps, let delay):
-            inputHandler.emitSequence(steps: steps, delay: delay)
+            // Merge any active modifier holds into each step
+            let modFlags = heldModifierFlags()
+            let mergedSteps = steps.map { (keyCode: $0.keyCode, flags: $0.flags.union(modFlags)) }
+            // Dispatch off main thread — usleep in emitSequence blocks the calling thread,
+            // which prevents CGEvents from being delivered when triggered from menu callbacks.
+            let handler = inputHandler
+            DispatchQueue.global(qos: .userInteractive).async {
+                handler.emitSequence(steps: mergedSteps, delay: delay)
+            }
 
         case .textInput(let text):
             inputHandler.emitText(text)
@@ -338,7 +414,8 @@ final class ControllerManager: ObservableObject {
             inputHandler.emitMediaKey(keyType: keyType)
 
         case .modeSelect:
-            let modes = Array(profile.modes.keys.sorted())
+            let config = configLoader.config
+            let modes = allModeNames(profile: profile, config: config)
             guard !modes.isEmpty else { return }
             modePicker.show(modes: modes, currentMode: currentMode) { [weak self] selectedMode in
                 guard let self else { return }
@@ -348,21 +425,22 @@ final class ControllerManager: ObservableObject {
             }
 
         case .prevMode:
-            let modes = profile.modes.keys.sorted()
+            let modes = allModeNames(profile: profile, config: configLoader.config)
             guard !modes.isEmpty else { return }
             let idx = modes.firstIndex(of: currentMode) ?? 0
             let newMode = modes[(idx - 1 + modes.count) % modes.count]
             switchMode(newMode, profileName: profileName)
 
         case .nextMode:
-            let modes = profile.modes.keys.sorted()
+            let modes = allModeNames(profile: profile, config: configLoader.config)
             guard !modes.isEmpty else { return }
             let idx = modes.firstIndex(of: currentMode) ?? 0
             let newMode = modes[(idx + 1) % modes.count]
             switchMode(newMode, profileName: profileName)
 
         case .setMode(let name):
-            guard profile.modes[name] != nil else {
+            let config = configLoader.config
+            guard profile.modes[name] != nil || config.sharedModes?[name] != nil else {
                 print("[PadIO] setMode: unknown mode '\(name)' in profile '\(profileName)'")
                 return
             }
@@ -379,7 +457,7 @@ final class ControllerManager: ObservableObject {
                 guard let self else { return }
                 guard menuConfig.items.indices.contains(index) else { return }
                 let itemAction = menuConfig.items[index].action
-                guard let action = MappingResolver().buildActionPublic(from: itemAction) else { return }
+                guard let action = MappingResolver().buildActionPublic(from: itemAction, mappingConfig: self.configLoader.config) else { return }
                 self.executeAction(action, profile: profile, profileName: profileName, currentMode: currentMode)
             }
 
@@ -402,7 +480,167 @@ final class ControllerManager: ObservableObject {
                 duration: duration
             )
             hapticController.rumbleAll(params: params)
+
+        case .leftClickHold:
+            inputHandler.emitMouseDown(button: .left)
+
+        case .leftClickRelease:
+            inputHandler.emitMouseUp(button: .left)
+
+        case .rightClickHold:
+            inputHandler.emitMouseDown(button: .right)
+
+        case .rightClickRelease:
+            inputHandler.emitMouseUp(button: .right)
+
+        case .keyDown(let keyCode, let flags):
+            inputHandler.emitKeyDown(keyCode: keyCode, flags: flags.union(heldModifierFlags()))
+
+        case .keyUp(let keyCode, let flags):
+            inputHandler.emitKeyUp(keyCode: keyCode, flags: flags.union(heldModifierFlags()))
+
+        case .noop:
+            break
+
+        case .modifierHold(let flags):
+            inputHandler.emitModifierDown(flags: flags)
+
+        case .modifierRelease(let flags):
+            inputHandler.emitModifierUp(flags: flags)
         }
+    }
+
+    // MARK: - Hold helpers
+
+    /// Checks if any config in the cascade for this button has a `hold` field.
+    /// If so, builds both the press and hold actions (merging from different cascade levels)
+    /// and returns them as a HoldContext.
+    private func resolveHoldConfig(buttonID: ButtonID, heldButtons: [ButtonID: Bool]) -> HoldContext? {
+        let config = configLoader.config
+        let bundleID = appObserver.frontmostBundleID
+        guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else { return nil }
+        let modeName = profileModes[profileName] ?? profile.defaultMode
+
+        // Collect all matching configs across the cascade
+        let allConfigs = mappingResolver.resolveAllConfigs(
+            button: buttonID,
+            heldButtons: heldButtons,
+            profile: profile,
+            activeMode: modeName,
+            config: config
+        )
+        guard !allConfigs.isEmpty else { return nil }
+
+        // Find the effective hold: first config in cascade with a hold field
+        guard let holdSource = allConfigs.first(where: { $0.hold != nil }),
+              let holdActionConfig = holdSource.hold,
+              holdActionConfig.type != "none" else {
+            return nil
+        }
+
+        // Find the effective press: winning config, but if "none", inherit from lower levels
+        let pressActionConfig: ActionConfig
+        if allConfigs[0].type == "none" {
+            pressActionConfig = allConfigs.dropFirst().first(where: { $0.type != "none" }) ?? allConfigs[0]
+        } else {
+            pressActionConfig = allConfigs[0]
+        }
+
+        guard let pressAction = mappingResolver.buildActionPublic(from: pressActionConfig, mappingConfig: config) else { return nil }
+        guard let holdAction = mappingResolver.buildActionPublic(from: holdActionConfig, mappingConfig: config) else { return nil }
+
+        return HoldContext(
+            pressAction: pressAction,
+            holdAction: holdAction,
+            profile: profile,
+            profileName: profileName,
+            currentMode: modeName
+        )
+    }
+
+    /// Converts a hold action to its "activated" form. Keystrokes become key-down only.
+    private func convertToHoldAction(_ action: Action) -> Action {
+        switch action {
+        case .keystroke(let keyCode, let flags):
+            return .keyDown(keyCode: keyCode, flags: flags)
+        default:
+            return action
+        }
+    }
+
+    /// Returns the release counterpart for a hold action.
+    private func releaseAction(for holdAction: Action) -> Action {
+        switch holdAction {
+        case .leftClickHold:
+            return .leftClickRelease
+        case .rightClickHold:
+            return .rightClickRelease
+        case .keystroke(let keyCode, let flags):
+            return .keyUp(keyCode: keyCode, flags: flags)
+        case .modifierHold(let flags):
+            return .modifierRelease(flags: flags)
+        default:
+            // For actions without an explicit release, use a no-op by returning the same
+            // (executeAction will just fire the action again, which is fine for one-shots)
+            return .keyUp(keyCode: 0, flags: [])
+        }
+    }
+
+    /// Returns the union of all modifier flags currently held via modifierHold actions.
+    private func heldModifierFlags() -> CGEventFlags {
+        var flags: CGEventFlags = []
+        for (_, buttons) in holdStates {
+            for (_, state) in buttons {
+                if case .held(let context) = state,
+                   case .modifierHold(let heldFlags) = context.holdAction {
+                    flags.insert(heldFlags)
+                }
+            }
+        }
+        return flags
+    }
+
+    /// Returns true if any button on any controller has an active mouse hold.
+    private func isMouseHeld() -> Bool {
+        for (_, buttons) in holdStates {
+            for (_, state) in buttons {
+                if case .held(let context) = state {
+                    switch context.holdAction {
+                    case .leftClickHold, .rightClickHold:
+                        return true
+                    default:
+                        continue
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /// Returns the mouse button being held, if any.
+    private func heldMouseButton() -> CGMouseButton? {
+        for (_, buttons) in holdStates {
+            for (_, state) in buttons {
+                if case .held(let context) = state {
+                    switch context.holdAction {
+                    case .leftClickHold:
+                        return .left
+                    case .rightClickHold:
+                        return .right
+                    default:
+                        continue
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Returns the sorted union of profile mode names and shared mode names.
+    private func allModeNames(profile: ProfileConfig, config: MappingConfig) -> [String] {
+        var names = Set(profile.modes.keys)
+        if let shared = config.sharedModes { names.formUnion(shared.keys) }
+        return names.sorted()
     }
 
     private func switchMode(_ modeName: String, profileName: String) {

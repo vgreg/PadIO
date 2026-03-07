@@ -215,6 +215,102 @@ struct InputHandler {
         event.post(tap: .cgSessionEventTap)
     }
 
+    // MARK: - Modifier hold / release (flagsChanged)
+
+    /// Key codes for modifier keys used in flagsChanged events.
+    private static let modifierKeyCodes: [(flag: CGEventFlags, keyCode: CGKeyCode)] = [
+        (.maskCommand,     0x37),  // kVK_Command
+        (.maskShift,       0x38),  // kVK_Shift
+        (.maskAlternate,   0x3A),  // kVK_Option
+        (.maskControl,     0x3B),  // kVK_Control
+        (.maskSecondaryFn, 0x3F),  // kVK_Function (Globe)
+    ]
+
+    /// Emit a flagsChanged event to press modifier keys. macOS will treat these
+    /// modifiers as held until a corresponding release event is sent.
+    func emitModifierDown(flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        // Use the key code of the first matching modifier
+        let keyCode = Self.modifierKeyCodes.first(where: { flags.contains($0.flag) })?.keyCode ?? 0x37
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) else { return }
+        event.type = .flagsChanged
+        event.flags = flags
+        event.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted modifier down: flags=\(flags.rawValue)")
+    }
+
+    /// Emit a flagsChanged event to release modifier keys.
+    func emitModifierUp(flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let keyCode = Self.modifierKeyCodes.first(where: { flags.contains($0.flag) })?.keyCode ?? 0x37
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
+        event.type = .flagsChanged
+        event.flags = []  // Empty flags = all modifiers released
+        event.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted modifier up: flags=\(flags.rawValue)")
+    }
+
+    // MARK: - Individual key down / key up
+
+    /// Emit only a key-down event (no matching key-up). Used for hold actions.
+    func emitKeyDown(keyCode: CGKeyCode, flags: CGEventFlags = []) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) else { return }
+        keyDown.flags = flags
+        keyDown.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted key down: keyCode=0x\(String(keyCode, radix: 16)) flags=\(flags.rawValue)")
+    }
+
+    /// Emit only a key-up event. Used to release a held key.
+    func emitKeyUp(keyCode: CGKeyCode, flags: CGEventFlags = []) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
+        keyUp.flags = flags
+        keyUp.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted key up: keyCode=0x\(String(keyCode, radix: 16)) flags=\(flags.rawValue)")
+    }
+
+    // MARK: - Mouse down / up / drag
+
+    /// Emit only a mouse-down event at the current cursor position.
+    func emitMouseDown(button: CGMouseButton) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let pos = CGEvent(source: nil)?.location ?? .zero
+        let downType: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
+        guard let down = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: pos, mouseButton: button) else { return }
+        down.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted mouse down: \(button == .left ? "left" : "right")")
+    }
+
+    /// Emit only a mouse-up event at the current cursor position.
+    func emitMouseUp(button: CGMouseButton) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let pos = CGEvent(source: nil)?.location ?? .zero
+        let upType: CGEventType = button == .left ? .leftMouseUp : .rightMouseUp
+        guard let up = CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: pos, mouseButton: button) else { return }
+        up.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted mouse up: \(button == .left ? "left" : "right")")
+    }
+
+    /// Emit a mouse-drag event (mouse-moved while button is held).
+    func emitMouseDrag(dx: CGFloat, dy: CGFloat, button: CGMouseButton) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let currentPos = CGEvent(source: nil)?.location ?? .zero
+        let newPos = CGPoint(x: currentPos.x + dx, y: currentPos.y + dy)
+        let dragType: CGEventType = button == .left ? .leftMouseDragged : .rightMouseDragged
+
+        guard let event = CGEvent(
+            mouseEventSource: source,
+            mouseType: dragType,
+            mouseCursorPosition: newPos,
+            mouseButton: button
+        ) else { return }
+
+        event.setIntegerValueField(.mouseEventDeltaX, value: Int64(dx))
+        event.setIntegerValueField(.mouseEventDeltaY, value: Int64(dy))
+        event.post(tap: .cgSessionEventTap)
+    }
+
     // MARK: - Mouse click
 
     /// Emit a mouse button down + up at the current cursor position.
