@@ -215,6 +215,41 @@ struct InputHandler {
         event.post(tap: .cgSessionEventTap)
     }
 
+    // MARK: - Modifier hold / release (flagsChanged)
+
+    /// Key codes for modifier keys used in flagsChanged events.
+    private static let modifierKeyCodes: [(flag: CGEventFlags, keyCode: CGKeyCode)] = [
+        (.maskCommand,     0x37),  // kVK_Command
+        (.maskShift,       0x38),  // kVK_Shift
+        (.maskAlternate,   0x3A),  // kVK_Option
+        (.maskControl,     0x3B),  // kVK_Control
+        (.maskSecondaryFn, 0x3F),  // kVK_Function (Globe)
+    ]
+
+    /// Emit a flagsChanged event to press modifier keys. macOS will treat these
+    /// modifiers as held until a corresponding release event is sent.
+    func emitModifierDown(flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        // Use the key code of the first matching modifier
+        let keyCode = Self.modifierKeyCodes.first(where: { flags.contains($0.flag) })?.keyCode ?? 0x37
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) else { return }
+        event.type = .flagsChanged
+        event.flags = flags
+        event.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted modifier down: flags=\(flags.rawValue)")
+    }
+
+    /// Emit a flagsChanged event to release modifier keys.
+    func emitModifierUp(flags: CGEventFlags) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let keyCode = Self.modifierKeyCodes.first(where: { flags.contains($0.flag) })?.keyCode ?? 0x37
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return }
+        event.type = .flagsChanged
+        event.flags = []  // Empty flags = all modifiers released
+        event.post(tap: .cgSessionEventTap)
+        print("[PadIO] Emitted modifier up: flags=\(flags.rawValue)")
+    }
+
     // MARK: - Individual key down / key up
 
     /// Emit only a key-down event (no matching key-up). Used for hold actions.

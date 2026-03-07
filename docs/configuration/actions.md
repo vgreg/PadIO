@@ -150,6 +150,34 @@ Hold a mouse button down (for drag operations). Used as hold actions — see [Pr
 { "type": "right_click_hold" }
 ```
 
+## `modifier_hold`
+
+Hold modifier keys down using proper `flagsChanged` events. macOS treats these as physically held modifiers until the button is released. Used as a hold action — see [Press vs Hold](#press-vs-hold) below.
+
+```json
+{ "type": "modifier_hold", "modifiers": ["cmd"] }
+{ "type": "modifier_hold", "modifiers": ["ctrl", "shift"] }
+{ "type": "modifier_hold", "modifiers": ["hyper"] }
+```
+
+| Field       | Type     | Required | Description |
+|-------------|----------|----------|-------------|
+| `modifiers` | string[] | yes      | Modifier keys to hold (see [Modifiers](../reference/modifiers.md)). Also supports `"globe"` / `"fn"`. |
+
+This enables workflows like the macOS app switcher:
+
+```json
+"LT": {
+  "type": "keystroke", "key": "tab", "modifiers": ["cmd"],
+  "hold": { "type": "modifier_hold", "modifiers": ["cmd"] }
+},
+"LT+dpad_right": { "type": "keystroke", "key": "right" },
+"LT+dpad_left":  { "type": "keystroke", "key": "left" }
+```
+
+- **Tap LT**: Cmd+Tab — quick switch to last app
+- **Hold LT**: holds Cmd down, opening the app switcher. Navigate with dpad arrows (which fire as `LT+dpad_*` combos). Release LT to confirm and release Cmd.
+
 ## `mouse_move`
 
 Map a joystick or dpad to continuous mouse cursor movement. Used as a binding with the [axis source name](../reference/axis-sources.md) as the key.

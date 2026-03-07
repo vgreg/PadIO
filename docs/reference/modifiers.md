@@ -10,6 +10,7 @@ Modifiers are specified in the `modifiers` array of a [`keystroke`](../configura
 | `shift`             | Shift (⇧)                        |
 | `hyper`             | ⌘ + ⌃ + ⌥ + ⇧ (all four)       |
 | `meh`               | ⌃ + ⌥ + ⇧ (everything but ⌘)   |
+| `globe` / `fn`      | Globe / Fn (🌐)                  |
 
 ## Usage
 

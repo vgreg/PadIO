@@ -53,6 +53,10 @@ enum Action: Sendable {
     case keyDown(keyCode: CGKeyCode, flags: CGEventFlags)
     /// Release a previously held key.
     case keyUp(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// Hold modifier keys down via flagsChanged events (e.g., Cmd for app switcher).
+    case modifierHold(flags: CGEventFlags)
+    /// Release held modifier keys via flagsChanged events.
+    case modifierRelease(flags: CGEventFlags)
 }
 
 // MARK: - Axis mapping
@@ -391,6 +395,14 @@ struct MappingResolver {
         case "right_click_hold":
             return .rightClickHold
 
+        case "modifier_hold":
+            let flags = Self.modifierFlags(for: config.modifiers ?? [])
+            guard flags != [] else {
+                print("[PadIO] modifier_hold action missing 'modifiers'")
+                return nil
+            }
+            return .modifierHold(flags: flags)
+
         case "keyboard_viewer":
             return .keyboardViewer
 
@@ -480,7 +492,30 @@ struct MappingResolver {
 
         case .keyUp(let keyCode, let flags):
             return "key_up: \(describeKeystroke(keyCode: keyCode, flags: flags))"
+
+        case .modifierHold(let flags):
+            return "modifier_hold: \(describeModifiers(flags))"
+
+        case .modifierRelease(let flags):
+            return "modifier_release: \(describeModifiers(flags))"
         }
+    }
+
+    private static func describeModifiers(_ flags: CGEventFlags) -> String {
+        let isHyper = flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        let isMeh   = !flags.contains(.maskCommand) && flags.contains(.maskControl) &&
+                      flags.contains(.maskAlternate) && flags.contains(.maskShift)
+        if isHyper { return "hyper" }
+        if isMeh   { return "meh" }
+
+        var parts: [String] = []
+        if flags.contains(.maskCommand)     { parts.append("cmd") }
+        if flags.contains(.maskControl)     { parts.append("ctrl") }
+        if flags.contains(.maskAlternate)   { parts.append("alt") }
+        if flags.contains(.maskShift)       { parts.append("shift") }
+        if flags.contains(.maskSecondaryFn) { parts.append("globe") }
+        return parts.isEmpty ? "none" : parts.joined(separator: "+")
     }
 
     private static func describeKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) -> String {
@@ -613,6 +648,8 @@ struct MappingResolver {
                 flags.insert(.maskControl)
                 flags.insert(.maskAlternate)
                 flags.insert(.maskShift)
+            case "globe", "fn":
+                flags.insert(.maskSecondaryFn)
             default:
                 print("[PadIO] Unknown modifier: '\(name)'")
             }

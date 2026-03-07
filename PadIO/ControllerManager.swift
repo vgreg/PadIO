@@ -493,6 +493,12 @@ final class ControllerManager: ObservableObject {
 
         case .keyUp(let keyCode, let flags):
             inputHandler.emitKeyUp(keyCode: keyCode, flags: flags)
+
+        case .modifierHold(let flags):
+            inputHandler.emitModifierDown(flags: flags)
+
+        case .modifierRelease(let flags):
+            inputHandler.emitModifierUp(flags: flags)
         }
     }
 
@@ -555,6 +561,8 @@ final class ControllerManager: ObservableObject {
             return .rightClickRelease
         case .keystroke(let keyCode, let flags):
             return .keyUp(keyCode: keyCode, flags: flags)
+        case .modifierHold(let flags):
+            return .modifierRelease(flags: flags)
         default:
             // For actions without an explicit release, use a no-op by returning the same
             // (executeAction will just fire the action again, which is fine for one-shots)
