@@ -56,12 +56,12 @@ pollControllers()
 
 Profile is selected by matching the frontmost app's bundle ID against `profile.apps[]`, falling back to the `"default"` profile. Within a profile, bindings resolve in this priority order (highest wins):
 
-1. Combo key (`modifier+button`) in top-level `config.global`
+1. Combo key (`modifier+button`) in active mode bindings
 2. Combo key in `profile.global`
-3. Combo key in active mode bindings
-4. Plain key in top-level `config.global`
+3. Combo key in top-level `config.global`
+4. Plain key in active mode bindings (`profile.modes[activeModeString]`)
 5. Plain key in `profile.global`
-6. Plain key in active mode bindings (`profile.modes[activeModeString]`)
+6. Plain key in top-level `config.global` (cross-profile defaults)
 
 Combo keys use the syntax `"<modifier>+<button>"` (e.g., `"X+dpad_up"`) in any bindings dictionary. When multiple buttons are held, `ButtonID.allCases` order determines which modifier is tried first.
 

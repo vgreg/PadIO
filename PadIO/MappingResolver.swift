@@ -109,12 +109,12 @@ struct MappingResolver {
     /// Resolves an action for a button press given the active profile and mode.
     ///
     /// Resolution cascade (combo keys first, then plain keys):
-    /// 1. Combo key in top-level `global`.
-    /// 2. Combo key in active mode bindings.
-    /// 3. Combo key in profile `global`.
-    /// 4. Plain key in top-level `global`.
-    /// 5. Plain key in active mode bindings.
-    /// 6. Plain key in profile `global` (defaults within a profile).
+    /// 1. Combo key in active mode bindings (highest priority).
+    /// 2. Combo key in profile `global`.
+    /// 3. Combo key in top-level `global` (cross-profile defaults).
+    /// 4. Plain key in active mode bindings (highest priority).
+    /// 5. Plain key in profile `global`.
+    /// 6. Plain key in top-level `global` (cross-profile defaults).
     func resolve(button: ButtonID, heldButtons: [ButtonID: Bool] = [:], profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> Action? {
         let key = button.rawValue
 
@@ -123,9 +123,6 @@ struct MappingResolver {
             guard modifierID != button, heldButtons[modifierID] == true else { continue }
             let comboKey = "\(modifierID.rawValue)+\(key)"
 
-            if let actionConfig = config.global[comboKey] {
-                return buildAction(from: actionConfig, mappingConfig: config)
-            }
             if let profile {
                 if let modeName = activeMode,
                    let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
@@ -136,24 +133,25 @@ struct MappingResolver {
                     return buildAction(from: actionConfig, mappingConfig: config)
                 }
             }
+            if let actionConfig = config.global[comboKey] {
+                return buildAction(from: actionConfig, mappingConfig: config)
+            }
         }
 
-        // 4. Top-level global (supersedes everything)
-        if let actionConfig = config.global[key] {
-            return buildAction(from: actionConfig, mappingConfig: config)
-        }
-
-        guard let profile else { return nil }
-
-        // 5. Active mode bindings (profile modes, then shared modes)
-        if let modeName = activeMode,
+        // 4. Active mode bindings (highest priority)
+        if let profile, let modeName = activeMode,
            let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let actionConfig = mode.bindings[key] {
             return buildAction(from: actionConfig, mappingConfig: config)
         }
 
-        // 6. Profile-level global (defaults within a profile)
-        if let actionConfig = profile.global[key] {
+        // 5. Profile-level global
+        if let profile, let actionConfig = profile.global[key] {
+            return buildAction(from: actionConfig, mappingConfig: config)
+        }
+
+        // 6. Top-level global (cross-profile defaults)
+        if let actionConfig = config.global[key] {
             return buildAction(from: actionConfig, mappingConfig: config)
         }
 
@@ -164,23 +162,21 @@ struct MappingResolver {
 
     /// Resolves an axis mapping for a given axis source using the same cascade as button resolution.
     ///
-    /// Resolution order: top-level global → active mode → profile global.
+    /// Resolution order: active mode → profile global → top-level global.
     func resolveAxisMapping(axisID: AxisID, profile: ProfileConfig?, activeMode: String?, config: MappingConfig) -> AxisMapping? {
         let key = axisID.rawValue
 
-        if let actionConfig = config.global[key] {
-            return buildAxisMapping(from: actionConfig)
-        }
-
-        guard let profile else { return nil }
-
-        if let modeName = activeMode,
+        if let profile, let modeName = activeMode,
            let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let actionConfig = mode.bindings[key] {
             return buildAxisMapping(from: actionConfig)
         }
 
-        if let actionConfig = profile.global[key] {
+        if let profile, let actionConfig = profile.global[key] {
+            return buildAxisMapping(from: actionConfig)
+        }
+
+        if let actionConfig = config.global[key] {
             return buildAxisMapping(from: actionConfig)
         }
 
@@ -230,7 +226,14 @@ struct MappingResolver {
         var result: [String: String] = [:]
         let resolver = MappingResolver()
 
-        // 3. Profile-level global (lowest priority — add first so higher priority overwrites)
+        // 3. Top-level global (lowest priority — add first so higher priority overwrites)
+        for (button, actionConfig) in config.global {
+            if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
+                result[button] = Self.describe(action)
+            }
+        }
+
+        // 2. Profile-level global (overwrites top-level global)
         if let profile {
             for (button, actionConfig) in profile.global {
                 if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
@@ -239,21 +242,13 @@ struct MappingResolver {
             }
         }
 
-        // 2. Active mode bindings (overwrites profile global for the same button)
-        // Check profile modes first, then shared modes
+        // 1. Active mode bindings (highest priority — overwrites all)
         if let profile, let modeName = activeMode,
            let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]) {
             for (button, actionConfig) in mode.bindings {
                 if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
                     result[button] = Self.describe(action)
                 }
-            }
-        }
-
-        // 1. Top-level global (highest priority — overwrites all)
-        for (button, actionConfig) in config.global {
-            if let action = resolver.buildAction(from: actionConfig, mappingConfig: config) {
-                result[button] = Self.describe(action)
             }
         }
 
@@ -274,20 +269,19 @@ struct MappingResolver {
         for modifierID in ButtonID.allCases {
             guard modifierID != button, heldButtons[modifierID] == true else { continue }
             let comboKey = "\(modifierID.rawValue)+\(key)"
-            if let ac = config.global[comboKey] { return ac }
             if let profile {
                 if let modeName = activeMode,
                    let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
                    let ac = mode.bindings[comboKey] { return ac }
                 if let ac = profile.global[comboKey] { return ac }
             }
+            if let ac = config.global[comboKey] { return ac }
         }
-        if let ac = config.global[key] { return ac }
-        guard let profile else { return nil }
-        if let modeName = activeMode,
+        if let profile, let modeName = activeMode,
            let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
            let ac = mode.bindings[key] { return ac }
-        if let ac = profile.global[key] { return ac }
+        if let profile, let ac = profile.global[key] { return ac }
+        if let ac = config.global[key] { return ac }
         return nil
     }
 
@@ -297,27 +291,27 @@ struct MappingResolver {
         let key = button.rawValue
         var results: [ActionConfig] = []
 
-        // Combo keys
+        // Combo keys (mode → profile global → top global)
         for modifierID in ButtonID.allCases {
             guard modifierID != button, heldButtons[modifierID] == true else { continue }
             let comboKey = "\(modifierID.rawValue)+\(key)"
-            if let ac = config.global[comboKey] { results.append(ac) }
             if let profile {
                 if let modeName = activeMode,
                    let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
                    let ac = mode.bindings[comboKey] { results.append(ac) }
                 if let ac = profile.global[comboKey] { results.append(ac) }
             }
+            if let ac = config.global[comboKey] { results.append(ac) }
         }
 
-        // Plain keys
-        if let ac = config.global[key] { results.append(ac) }
+        // Plain keys (mode → profile global → top global)
         if let profile {
             if let modeName = activeMode,
                let mode = (profile.modes[modeName] ?? config.sharedModes?[modeName]),
                let ac = mode.bindings[key] { results.append(ac) }
             if let ac = profile.global[key] { results.append(ac) }
         }
+        if let ac = config.global[key] { results.append(ac) }
 
         return results
     }

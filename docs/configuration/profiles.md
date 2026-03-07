@@ -100,18 +100,16 @@ Combo keys work in top-level `global`, profile `global`, and mode bindings — a
 
 When a button is pressed, PadIO checks combo keys first (if any other buttons are held), then falls back to plain keys:
 
-1. **Combo key in top-level `global`**
-2. **Combo key in active mode bindings**
-3. **Combo key in profile `global`**
-4. **Plain key in top-level `global`**
-5. **Plain key in active mode bindings**
-6. **Plain key in profile `global`**
+1. **Combo key in active mode bindings** (highest priority)
+2. **Combo key in profile `global`**
+3. **Combo key in top-level `global`**
+4. **Plain key in active mode bindings** (highest priority)
+5. **Plain key in profile `global`**
+6. **Plain key in top-level `global`**
 
-Mode bindings override profile `global` for the same button. This lets you define defaults in profile `global` and override specific buttons per mode.
+Mode bindings have the highest priority, so switching to a mode can override any button — including those defined in top-level `global`. This lets you define cross-profile defaults in top-level `global` (stick mappings, click buttons) and override specific buttons per mode when needed.
 
 If multiple buttons are held simultaneously, PadIO tries them in `ButtonID` order and uses the first match.
-
-Top-level `global` has the highest priority — use it for bindings that should always be active (stick mappings, click buttons) regardless of profile or mode.
 
 ### Hold inheritance
 
