@@ -101,12 +101,37 @@ Combo keys work in top-level `global`, profile `global`, and mode bindings — a
 When a button is pressed, PadIO checks combo keys first (if any other buttons are held), then falls back to plain keys:
 
 1. **Combo key in top-level `global`**
-2. **Combo key in profile `global`**
-3. **Combo key in active mode bindings**
+2. **Combo key in active mode bindings**
+3. **Combo key in profile `global`**
 4. **Plain key in top-level `global`**
-5. **Plain key in profile `global`**
-6. **Plain key in active mode bindings**
+5. **Plain key in active mode bindings**
+6. **Plain key in profile `global`**
+
+Mode bindings override profile `global` for the same button. This lets you define defaults in profile `global` and override specific buttons per mode.
 
 If multiple buttons are held simultaneously, PadIO tries them in `ButtonID` order and uses the first match.
 
-This means you can set a button in the top-level `global` to guarantee it always does the same thing, while still allowing per-mode overrides for other buttons.
+Top-level `global` has the highest priority — use it for bindings that should always be active (stick mappings, click buttons) regardless of profile or mode.
+
+### Hold inheritance
+
+When a mode overrides a button that has a `hold` action defined at a lower priority level (e.g., profile `global`), the hold behavior is **inherited** automatically. Only the press (tap) action is overridden — the hold persists unless explicitly cleared.
+
+```json
+"global": {
+  "L3": { "type": "left_click", "hold": { "type": "left_click_hold" } }
+},
+"modes": {
+  "special": {
+    "L3": { "type": "keystroke", "key": "space" }
+  }
+}
+```
+
+In `special` mode, tapping L3 sends space, but holding L3 still holds the left mouse button (inherited from profile `global`).
+
+To explicitly clear an inherited hold, set the hold to `"none"`:
+
+```json
+"L3": { "type": "keystroke", "key": "space", "hold": { "type": "none" } }
+```

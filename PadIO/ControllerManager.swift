@@ -512,34 +512,42 @@ final class ControllerManager: ObservableObject {
 
     // MARK: - Hold helpers
 
-    /// Checks if the binding for a button has a `hold` field. If so, builds both
-    /// the press and hold actions and returns them as a HoldContext.
+    /// Checks if any config in the cascade for this button has a `hold` field.
+    /// If so, builds both the press and hold actions (merging from different cascade levels)
+    /// and returns them as a HoldContext.
     private func resolveHoldConfig(buttonID: ButtonID, heldButtons: [ButtonID: Bool]) -> HoldContext? {
         let config = configLoader.config
         let bundleID = appObserver.frontmostBundleID
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else { return nil }
         let modeName = profileModes[profileName] ?? profile.defaultMode
 
-        guard let actionConfig = mappingResolver.resolveActionConfig(
+        // Collect all matching configs across the cascade
+        let allConfigs = mappingResolver.resolveAllConfigs(
             button: buttonID,
             heldButtons: heldButtons,
             profile: profile,
             activeMode: modeName,
             config: config
-        ) else { return nil }
+        )
+        guard !allConfigs.isEmpty else { return nil }
 
-        // Only enter hold mode if the config has a hold field
-        guard let holdActionConfig = actionConfig.hold else { return nil }
+        // Find the effective hold: first config in cascade with a hold field
+        guard let holdSource = allConfigs.first(where: { $0.hold != nil }),
+              let holdActionConfig = holdSource.hold,
+              holdActionConfig.type != "none" else {
+            return nil
+        }
 
-        guard let pressAction = mappingResolver.resolve(
-            button: buttonID,
-            heldButtons: heldButtons,
-            profile: profile,
-            activeMode: modeName,
-            config: config
-        ) else { return nil }
+        // Find the effective press: winning config, but if "none", inherit from lower levels
+        let pressActionConfig: ActionConfig
+        if allConfigs[0].type == "none" {
+            pressActionConfig = allConfigs.dropFirst().first(where: { $0.type != "none" }) ?? allConfigs[0]
+        } else {
+            pressActionConfig = allConfigs[0]
+        }
 
-        guard let holdAction = MappingResolver().buildActionPublic(from: holdActionConfig, mappingConfig: config) else { return nil }
+        guard let pressAction = mappingResolver.buildActionPublic(from: pressActionConfig, mappingConfig: config) else { return nil }
+        guard let holdAction = mappingResolver.buildActionPublic(from: holdActionConfig, mappingConfig: config) else { return nil }
 
         return HoldContext(
             pressAction: pressAction,
