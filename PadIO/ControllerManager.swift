@@ -392,14 +392,19 @@ final class ControllerManager: ObservableObject {
     ) {
         switch action {
         case .keystroke(let keyCode, let flags):
-            inputHandler.emitKeystroke(keyCode: keyCode, flags: flags)
+            // Merge any active modifier holds so held modifiers aren't dropped
+            let mergedFlags = flags.union(heldModifierFlags())
+            inputHandler.emitKeystroke(keyCode: keyCode, flags: mergedFlags)
 
         case .sequence(let steps, let delay):
+            // Merge any active modifier holds into each step
+            let modFlags = heldModifierFlags()
+            let mergedSteps = steps.map { (keyCode: $0.keyCode, flags: $0.flags.union(modFlags)) }
             // Dispatch off main thread — usleep in emitSequence blocks the calling thread,
             // which prevents CGEvents from being delivered when triggered from menu callbacks.
             let handler = inputHandler
             DispatchQueue.global(qos: .userInteractive).async {
-                handler.emitSequence(steps: steps, delay: delay)
+                handler.emitSequence(steps: mergedSteps, delay: delay)
             }
 
         case .textInput(let text):
@@ -489,10 +494,10 @@ final class ControllerManager: ObservableObject {
             inputHandler.emitMouseUp(button: .right)
 
         case .keyDown(let keyCode, let flags):
-            inputHandler.emitKeyDown(keyCode: keyCode, flags: flags)
+            inputHandler.emitKeyDown(keyCode: keyCode, flags: flags.union(heldModifierFlags()))
 
         case .keyUp(let keyCode, let flags):
-            inputHandler.emitKeyUp(keyCode: keyCode, flags: flags)
+            inputHandler.emitKeyUp(keyCode: keyCode, flags: flags.union(heldModifierFlags()))
 
         case .modifierHold(let flags):
             inputHandler.emitModifierDown(flags: flags)
@@ -568,6 +573,20 @@ final class ControllerManager: ObservableObject {
             // (executeAction will just fire the action again, which is fine for one-shots)
             return .keyUp(keyCode: 0, flags: [])
         }
+    }
+
+    /// Returns the union of all modifier flags currently held via modifierHold actions.
+    private func heldModifierFlags() -> CGEventFlags {
+        var flags: CGEventFlags = []
+        for (_, buttons) in holdStates {
+            for (_, state) in buttons {
+                if case .held(let context) = state,
+                   case .modifierHold(let heldFlags) = context.holdAction {
+                    flags.insert(heldFlags)
+                }
+            }
+        }
+        return flags
     }
 
     /// Returns true if any button on any controller has an active mouse hold.
