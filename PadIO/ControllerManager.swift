@@ -499,6 +499,9 @@ final class ControllerManager: ObservableObject {
         case .keyUp(let keyCode, let flags):
             inputHandler.emitKeyUp(keyCode: keyCode, flags: flags.union(heldModifierFlags()))
 
+        case .noop:
+            break
+
         case .modifierHold(let flags):
             inputHandler.emitModifierDown(flags: flags)
 

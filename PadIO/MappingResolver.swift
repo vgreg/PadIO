@@ -53,6 +53,8 @@ enum Action: Sendable {
     case keyDown(keyCode: CGKeyCode, flags: CGEventFlags)
     /// Release a previously held key.
     case keyUp(keyCode: CGKeyCode, flags: CGEventFlags)
+    /// No-op action — does nothing. Used as a tap action when only the hold behavior is wanted.
+    case noop
     /// Hold modifier keys down via flagsChanged events (e.g., Cmd for app switcher).
     case modifierHold(flags: CGEventFlags)
     /// Release held modifier keys via flagsChanged events.
@@ -415,6 +417,9 @@ struct MappingResolver {
             let duration  = config.delay     ?? 0.2  // "delay" doubles as duration for rumble
             return .rumble(intensity: intensity, sharpness: sharpness, duration: duration)
 
+        case "none":
+            return .noop
+
         case "mouse_move", "scroll":
             // Axis-only types; not dispatched as one-shot Actions from the button pipeline.
             return nil
@@ -492,6 +497,9 @@ struct MappingResolver {
 
         case .keyUp(let keyCode, let flags):
             return "key_up: \(describeKeystroke(keyCode: keyCode, flags: flags))"
+
+        case .noop:
+            return "none"
 
         case .modifierHold(let flags):
             return "modifier_hold: \(describeModifiers(flags))"
