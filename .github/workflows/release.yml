@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute next version (CalVer YYYY.M.patch)
+        id: version
+        run: |
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%-m)
+          PREFIX="${YEAR}.${MONTH}"
+
+          # Find the latest tag matching this month's prefix
+          LATEST=$(git tag --list "v${PREFIX}.*" --sort=-v:refname | head -n1)
+          if [ -z "$LATEST" ]; then
+            PATCH=0
+          else
+            PATCH=$(echo "$LATEST" | sed "s/v${PREFIX}\\.//")
+            PATCH=$((PATCH + 1))
+          fi
+
+          VERSION="${PREFIX}.${PATCH}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in Xcode project
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/MARKETING_VERSION = .*/MARKETING_VERSION = ${VERSION};/" \
+            PadIO.xcodeproj/project.pbxproj
+          sed -i "s/CURRENT_PROJECT_VERSION = .*/CURRENT_PROJECT_VERSION = ${VERSION};/" \
+            PadIO.xcodeproj/project.pbxproj
+
+      - name: Commit version bump and tag
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PadIO.xcodeproj/project.pbxproj
+          git commit -m "Bump version to ${VERSION}" || echo "No changes to commit"
+          git tag -a "${TAG}" -m "Release ${VERSION}"
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes \
+            --notes-start-tag "$(git tag --sort=-v:refname | sed -n '2p')"

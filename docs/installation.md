@@ -8,6 +8,9 @@ brew install --cask vgreg/tap/padio
 
 This installs PadIO to your Applications folder. Launch it from Spotlight or the Applications folder — it runs as a menu bar icon with no main window.
 
+!!! note "Gatekeeper warning"
+    PadIO is not notarized, so macOS will show a security warning on first launch. To bypass it, right-click the app → **Open** → **Open** in the dialog. You only need to do this once.
+
 ## Build from source
 
 ### Requirements
