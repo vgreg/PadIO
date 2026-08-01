@@ -74,10 +74,43 @@ final class ControllerManager: ObservableObject {
 
     // MARK: - External context
 
-    /// Reacts to a change in the external context token. Transport only for now —
-    /// context_modes resolution is added in a follow-up.
+    /// Reacts to a change in the external context token (e.g. the herdr bridge reporting
+    /// the app in the focused pane). Resolution rules, all deliberate:
+    ///
+    /// 1. Fires only on token change. `ContextObserver` publishes only when the token
+    ///    actually changes, so an unchanged token never re-applies a mode.
+    /// 2. No match leaves the mode alone. A token with no `context_modes` entry (or a nil
+    ///    token) keeps the active mode; it does *not* fall back to `default_mode`.
+    /// 3. Manual override sticks. Because we only act on token *changes*, a mode picked by
+    ///    hand survives until the context token changes.
+    /// 4. Unknown mode name is logged and ignored, mirroring the `.setMode` handling.
+    /// 5. Only the active profile is affected.
     private func applyContext(_ token: String?) {
-        print("[PadIO] Context token: \(token ?? "nil")")
+        guard let token else { return }  // no context: leave the mode alone
+
+        let config   = configLoader.config
+        let bundleID = appObserver.frontmostBundleID
+        guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else { return }
+
+        guard let modeName = contextMode(for: token, profile: profile, config: config) else { return }
+
+        // Skip if it is already the active mode (avoids a redundant mode-change HUD).
+        let currentMode = profileModes[profileName] ?? profile.defaultMode
+        guard modeName != currentMode else { return }
+
+        switchMode(modeName, profileName: profileName)
+    }
+
+    /// Resolves a context token to a valid mode name for the given profile, or nil when
+    /// the token has no `context_modes` entry (rule 2) or names a mode that does not exist
+    /// in the profile or shared modes (rule 4, logged).
+    private func contextMode(for token: String, profile: ProfileConfig, config: MappingConfig) -> String? {
+        guard let modeName = profile.contextModes[token] else { return nil }
+        guard profile.modes[modeName] != nil || config.sharedModes?[modeName] != nil else {
+            print("[PadIO] context: mode '\(modeName)' for token '\(token)' not found in profile")
+            return nil
+        }
+        return modeName
     }
 
     // MARK: - Profile resolution
@@ -94,7 +127,17 @@ final class ControllerManager: ObservableObject {
 
         if name != activeProfileName {
             activeProfileName = name
-            activeModeName = profile.defaultMode
+            // On returning to a profile, prefer the mode implied by the current context
+            // token over default_mode, so alt-tabbing away from and back to Ghostty keeps
+            // the app-driven mode instead of snapping back to the default. Set both
+            // activeModeName and profileModes so the two stay consistent.
+            if let token = contextObserver.context,
+               let mode = contextMode(for: token, profile: profile, config: config) {
+                activeModeName = mode
+                profileModes[name] = mode
+            } else {
+                activeModeName = profile.defaultMode
+            }
         }
     }
 

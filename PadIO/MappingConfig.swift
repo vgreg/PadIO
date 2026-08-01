@@ -145,20 +145,25 @@ struct ProfileConfig: Codable, Sendable {
     let global: [String: ActionConfig]
     /// Named modes within this profile, each with their own button bindings.
     let modes: [String: ModeConfig]
+    /// Maps an external context token (e.g. a process name from the herdr bridge)
+    /// to a mode name. Applied when the token changes; see ControllerManager.
+    let contextModes: [String: String]
 
     enum CodingKeys: String, CodingKey {
         case apps
         case defaultMode = "default_mode"
         case global
         case modes
+        case contextModes = "context_modes"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        apps        = try container.decodeIfPresent([String].self, forKey: .apps) ?? []
-        defaultMode = try container.decode(String.self, forKey: .defaultMode)
-        global      = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
-        modes       = try container.decodeIfPresent([String: ModeConfig].self, forKey: .modes) ?? [:]
+        apps         = try container.decodeIfPresent([String].self, forKey: .apps) ?? []
+        defaultMode  = try container.decode(String.self, forKey: .defaultMode)
+        global       = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
+        modes        = try container.decodeIfPresent([String: ModeConfig].self, forKey: .modes) ?? [:]
+        contextModes = try container.decodeIfPresent([String: String].self, forKey: .contextModes) ?? [:]
     }
 }
 
