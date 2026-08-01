@@ -46,6 +46,7 @@ nav:
   - Configuration:
     - Overview: configuration/index.md
     - Profiles & Modes: configuration/profiles.md
+    - Automatic Modes: configuration/automatic-modes.md
     - Actions: configuration/actions.md
     - Custom Menus: configuration/menus.md
     - Haptics: configuration/haptics.md

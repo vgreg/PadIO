@@ -19,6 +19,7 @@ If you're looking for a friendlier GUI-based controller remapper, search "Game C
 - **Button combos** — hold a modifier button to change what other buttons do (e.g., X+dpad_up)
 - **Per-app profiles** — automatic profile switching based on the frontmost application
 - **Modes** — multiple binding sets per profile, switchable via picker, cycling, or direct jump
+- **Automatic modes** — let an external program pick the mode, e.g. the app in your terminal's focused pane ([herdr](https://herdr.dev/) plugin [available](https://github.com/vgreg/herdr-padio))
 - **Custom menus** — define popup menus with labeled items that trigger any action
 - **Haptic feedback** — rumble on system beep, notifications, or on-demand from any binding
 - **Media keys** — play/pause, track skip, volume, brightness (no Accessibility permission needed)

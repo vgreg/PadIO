@@ -49,7 +49,21 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
         "LB":      { "type": "prev_mode" },
         "RB":      { "type": "next_mode" }
       },
+      "context_modes": {
+        "claude": "agent",
+        "nvim":   "nvim",
+        "zsh":    "shell",
+        "ssh":    "shell"
+      },
+      "hidden_modes": ["agent"],
       "modes": {
+        "agent": {
+          "A":          { "type": "keystroke", "key": "return" },
+          "B":          { "type": "keystroke", "key": "escape" },
+          "X":          { "type": "keystroke", "key": "`continue`" },
+          "dpad_up":    { "type": "keystroke", "key": "up" },
+          "dpad_down":  { "type": "keystroke", "key": "down" }
+        },
         "shell": {
           "A":          { "type": "keystroke", "key": "return" },
           "B":          { "type": "keystroke", "key": "c", "modifiers": ["ctrl"] },
@@ -140,4 +154,6 @@ This config:
     - **shell mode**: return, ctrl-c, ctrl-l, git menu on Y (using `"type": "menu", "name": "git"` syntax)
     - **nvim mode**: vim-style hjkl navigation, with X+dpad combos for ctrl-j/ctrl-k (half-page scroll)
     - **tmux mode**: prefix sequences (ctrl-a + key) for pane navigation
+    - **agent mode**: return, escape, and `continue` as injected text — reached only via `context_modes`
+- **Automatic modes**: `context_modes` switches mode from an external token (see [Automatic Modes](configuration/automatic-modes.md)), and `hidden_modes` keeps `agent` out of the picker since it is never chosen by hand
 - **Git menu**: quick terminal commands accessible via Y button in shell mode

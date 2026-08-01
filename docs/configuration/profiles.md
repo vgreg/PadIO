@@ -28,12 +28,14 @@ A profile is a named set of bindings that applies when specific apps are in the 
 }
 ```
 
-| Field          | Type     | Description |
-|----------------|----------|-------------|
-| `apps`         | string[] | Bundle IDs this profile applies to. Empty list = default catch-all profile. |
-| `default_mode` | string   | Mode to activate when the profile is first entered. |
-| `global`       | object   | Bindings that apply in all modes of this profile. Overridden by top-level `global`. |
-| `modes`        | object   | Named modes, each containing button bindings. |
+| Field           | Type     | Description |
+|-----------------|----------|-------------|
+| `apps`          | string[] | Bundle IDs this profile applies to. Empty list = default catch-all profile. |
+| `default_mode`  | string   | Mode to activate when the profile is first entered. |
+| `global`        | object   | Bindings that apply in all modes of this profile. Overridden by top-level `global`. |
+| `modes`         | object   | Named modes, each containing button bindings. |
+| `context_modes` | object   | Optional. Maps an external context token to a mode, for [automatic mode switching](automatic-modes.md). |
+| `hidden_modes`  | string[] | Optional. Modes to [hide from the picker](automatic-modes.md#hidden-modes) and from mode cycling. |
 
 ### Profile resolution order
 
@@ -78,6 +80,9 @@ Each profile can have multiple modes. Only one mode is active at a time. Switch 
 - [`mode_select`](actions.md#mode_select) — opens a picker overlay
 - [`prev_mode` / `next_mode`](actions.md#prev_mode-next_mode) — cycle through modes
 - [`mode:<name>`](actions.md#modename) — jump directly to a named mode
+- [automatic switching](automatic-modes.md) — let an external program pick the mode from what you are working in
+
+Modes that are only ever selected automatically can be kept out of the picker and the cycle with [`hidden_modes`](automatic-modes.md#hidden-modes).
 
 ## Button combos
 
