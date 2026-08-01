@@ -97,6 +97,10 @@ struct MappingConfig: Codable, Sendable {
     var aliases: [String: ActionConfig]?
     /// Modes shared across profiles — any profile can reference these by name.
     var sharedModes: [String: ModeConfig]?
+    /// Mode names hidden from the mode picker across all profiles (typically shared modes
+    /// that are context-driven). Hidden modes stay reachable via setMode, external context,
+    /// and default_mode; only the picker listing is filtered.
+    var hiddenModes: [String]
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
@@ -107,9 +111,10 @@ struct MappingConfig: Codable, Sendable {
         case haptics
         case aliases
         case sharedModes = "shared_modes"
+        case hiddenModes = "hidden_modes"
     }
 
-    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil, aliases: [String: ActionConfig]? = nil, sharedModes: [String: ModeConfig]? = nil) {
+    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil, aliases: [String: ActionConfig]? = nil, sharedModes: [String: ModeConfig]? = nil, hiddenModes: [String] = []) {
         self.triggerThreshold = triggerThreshold
         self.debugOverlay = debugOverlay
         self.global = global
@@ -118,6 +123,7 @@ struct MappingConfig: Codable, Sendable {
         self.haptics = haptics
         self.aliases = aliases
         self.sharedModes = sharedModes
+        self.hiddenModes = hiddenModes
     }
 
     init(from decoder: Decoder) throws {
@@ -130,6 +136,7 @@ struct MappingConfig: Codable, Sendable {
         haptics          = try container.decodeIfPresent(HapticsConfig.self, forKey: .haptics)
         aliases          = try container.decodeIfPresent([String: ActionConfig].self, forKey: .aliases)
         sharedModes      = try container.decodeIfPresent([String: ModeConfig].self, forKey: .sharedModes)
+        hiddenModes      = try container.decodeIfPresent([String].self, forKey: .hiddenModes) ?? []
     }
 
     static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
@@ -148,6 +155,9 @@ struct ProfileConfig: Codable, Sendable {
     /// Maps an external context token (e.g. a process name from the herdr bridge)
     /// to a mode name. Applied when the token changes; see ControllerManager.
     let contextModes: [String: String]
+    /// Mode names hidden from the mode picker in this profile. Hidden modes stay reachable
+    /// via setMode, external context, and default_mode; only the picker listing is filtered.
+    let hiddenModes: [String]
 
     enum CodingKeys: String, CodingKey {
         case apps
@@ -155,6 +165,7 @@ struct ProfileConfig: Codable, Sendable {
         case global
         case modes
         case contextModes = "context_modes"
+        case hiddenModes = "hidden_modes"
     }
 
     init(from decoder: Decoder) throws {
@@ -164,6 +175,7 @@ struct ProfileConfig: Codable, Sendable {
         global       = try container.decodeIfPresent([String: ActionConfig].self, forKey: .global) ?? [:]
         modes        = try container.decodeIfPresent([String: ModeConfig].self, forKey: .modes) ?? [:]
         contextModes = try container.decodeIfPresent([String: String].self, forKey: .contextModes) ?? [:]
+        hiddenModes  = try container.decodeIfPresent([String].self, forKey: .hiddenModes) ?? []
     }
 }
 
