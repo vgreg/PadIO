@@ -695,11 +695,19 @@ final class ControllerManager: ObservableObject {
         return nil
     }
 
-    /// Returns the sorted union of profile mode names and shared mode names.
+    /// Returns the sorted union of profile mode names and shared mode names, minus any
+    /// modes hidden via `hidden_modes` (per-profile or top-level). This is the single
+    /// source feeding the mode picker and prev/next cycling — the manual switchers.
+    /// Hidden modes stay reachable via setMode, external context, and default_mode.
+    ///
+    /// Degenerate guard: if hiding would leave nothing, fall back to the full set so the
+    /// picker is never an empty, inescapable panel.
     private func allModeNames(profile: ProfileConfig, config: MappingConfig) -> [String] {
         var names = Set(profile.modes.keys)
         if let shared = config.sharedModes { names.formUnion(shared.keys) }
-        return names.sorted()
+        let hidden = Set(profile.hiddenModes).union(config.hiddenModes)
+        let visible = names.subtracting(hidden)
+        return (visible.isEmpty ? names : visible).sorted()
     }
 
     private func switchMode(_ modeName: String, profileName: String) {
