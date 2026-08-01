@@ -20,6 +20,7 @@ final class ControllerManager: ObservableObject {
 
     let appObserver           = AppObserver()
     let configLoader          = ConfigLoader()
+    let contextObserver       = ContextObserver()
     let accessibilityPermission = AccessibilityPermission()
 
     private let inputHandler    = InputHandler()
@@ -62,6 +63,21 @@ final class ControllerManager: ObservableObject {
                 )
             }
             .store(in: &cancellables)
+
+        // React to the external context token (e.g. the herdr bridge reporting the app
+        // in the focused pane). Mapping the token to a mode is handled in #9; for now
+        // this just surfaces the transport working.
+        contextObserver.$context
+            .sink { [weak self] token in self?.applyContext(token) }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - External context
+
+    /// Reacts to a change in the external context token. Transport only for now —
+    /// context_modes resolution is added in a follow-up.
+    private func applyContext(_ token: String?) {
+        print("[PadIO] Context token: \(token ?? "nil")")
     }
 
     // MARK: - Profile resolution
