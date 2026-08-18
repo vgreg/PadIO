@@ -25,6 +25,7 @@ If you're looking for a friendlier GUI-based controller remapper, search "Game C
 - **Media keys** — play/pause, track skip, volume, brightness (no Accessibility permission needed)
 - **Hot-reload** — save the config file and changes take effect instantly
 - **Help HUD** — press the menu button anytime to see all current bindings
+- **Scalable HUDs** — one `hud_zoom` setting scales every overlay, for driving PadIO from across the room
 - **Debug overlay** — optional HUD showing every button press and its resolved action
 
 ## Installation

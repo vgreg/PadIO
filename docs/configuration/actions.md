@@ -105,6 +105,8 @@ Open a named custom menu overlay (defined in the top-level `menus` object). See 
 
 The legacy syntax `"type": "menu:git"` is still supported for backward compatibility.
 
+The menu itself — its items, and whether it is drawn as a list or a circular wheel — is defined in the top-level `menus` object. See [Custom Menus](menus.md).
+
 ## `alias`
 
 Reference a reusable action defined in the top-level `aliases` object.
