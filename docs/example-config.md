@@ -6,6 +6,8 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
 {
   "trigger_threshold": 0.5,
   "debug_overlay": false,
+  "hud_zoom": 1.0,
+  "menu_style": "list",
   "aliases": {
     "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] }
   },
@@ -136,7 +138,17 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
       { "label": "git push",      "action": { "type": "keystroke", "key": "`git push\n`" } },
       { "label": "git stash",     "action": { "type": "keystroke", "key": "`git stash\n`" } },
       { "label": "git stash pop", "action": { "type": "keystroke", "key": "`git stash pop\n`" } }
-    ]
+    ],
+    "window": {
+      "style": "wheel",
+      "items": [
+        { "label": "Left half",  "action": { "type": "keystroke", "key": "left",  "modifiers": ["ctrl", "opt"] } },
+        { "label": "Right half", "action": { "type": "keystroke", "key": "right", "modifiers": ["ctrl", "opt"] } },
+        { "label": "Top half",   "action": { "type": "keystroke", "key": "up",    "modifiers": ["ctrl", "opt"] } },
+        { "label": "Maximize",   "action": { "type": "keystroke", "key": "f",     "modifiers": ["ctrl", "opt"] } },
+        { "label": "Centre",     "action": { "type": "keystroke", "key": "c",     "modifiers": ["ctrl", "opt"] } }
+      ]
+    }
   }
 }
 ```
@@ -156,4 +168,6 @@ This config:
     - **tmux mode**: prefix sequences (ctrl-a + key) for pane navigation
     - **agent mode**: return, escape, and `continue` as injected text — reached only via `context_modes`
 - **Automatic modes**: `context_modes` switches mode from an external token (see [Automatic Modes](configuration/automatic-modes.md)), and `hidden_modes` keeps `agent` out of the picker since it is never chosen by hand
-- **Git menu**: quick terminal commands accessible via Y button in shell mode
+- **Git menu**: quick terminal commands accessible via Y button in shell mode, written as a bare array so it inherits the top-level `menu_style`
+- **Window menu**: the object form, overriding the default to draw as a circular wheel — both forms can be mixed freely (see [Custom Menus](configuration/menus.md))
+- **Appearance**: `menu_style` sets the default menu presentation and `hud_zoom` scales every HUD at once (see [HUDs](huds.md))

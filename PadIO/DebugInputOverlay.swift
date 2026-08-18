@@ -15,6 +15,8 @@ import Observation
 final class DebugInputViewModel {
     var buttonName: String = ""
     var actionDescription: String = ""
+    /// Uniform HUD scale from the `hud_zoom` config key.
+    var zoom: CGFloat = 1.0
 }
 
 // MARK: - SwiftUI View
@@ -23,6 +25,11 @@ struct DebugInputView: View {
     let viewModel: DebugInputViewModel
 
     var body: some View {
+        HUDZoom(zoom: viewModel.zoom) { content }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(alignment: .leading, spacing: 9) {
             Text(viewModel.buttonName)
                 .font(.system(size: 51, weight: .bold, design: .monospaced))
@@ -55,9 +62,10 @@ final class DebugInputController {
 
     // MARK: - Show
 
-    func show(button: String, actionDescription: String, postEventAccess: Bool = true) {
+    func show(button: String, actionDescription: String, postEventAccess: Bool = true, zoom: CGFloat = 1.0) {
         viewModel.buttonName = button
         viewModel.actionDescription = actionDescription
+        viewModel.zoom = zoom
 
         if panel == nil { createPanel() }
 
@@ -122,16 +130,14 @@ final class DebugInputController {
     }
 
     private func repositionPanel() {
-        guard let panel, let screen = NSScreen.main else { return }
-        // Flush pending layout so fittingSize reflects the new content
-        if let hosting = panel.contentView as? NSHostingView<DebugInputView> {
-            hosting.layoutSubtreeIfNeeded()
-            panel.setContentSize(hosting.fittingSize)
+        guard let panel, let hosting = panel.contentView else { return }
+        HUDPanelFitter.fit(panel: panel, hosting: hosting) { panel in
+            guard let screen = NSScreen.main else { return }
+            let screenFrame = screen.visibleFrame
+            let panelSize = panel.frame.size
+            let x = screenFrame.midX - panelSize.width / 2
+            let y = screenFrame.minY + 120  // 120pt above the Dock/bottom edge
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
-        let screenFrame = screen.visibleFrame
-        let panelSize = panel.frame.size
-        let x = screenFrame.midX - panelSize.width / 2
-        let y = screenFrame.minY + 120  // 120pt above the Dock/bottom edge
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

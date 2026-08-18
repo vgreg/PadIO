@@ -18,6 +18,8 @@ final class ModePickerViewModel {
     var highlightedIndex: Int = 0
     /// The mode that is already active (shown with a checkmark).
     var activeMode: String = ""
+    /// Uniform HUD scale from the `hud_zoom` config key.
+    var zoom: CGFloat = 1.0
 
     var highlightedMode: String? {
         guard !modes.isEmpty, modes.indices.contains(highlightedIndex) else { return nil }
@@ -43,6 +45,11 @@ struct ModePickerView: View {
     let onCancel: () -> Void
 
     var body: some View {
+        HUDZoom(zoom: viewModel.zoom) { content }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(spacing: 0) {
             Text("Select Mode")
                 .font(.headline)
@@ -144,8 +151,9 @@ final class ModePickerController {
 
     // MARK: - Show / Hide
 
-    func show(modes: [String], currentMode: String?, onSelect: @escaping (String) -> Void) {
+    func show(modes: [String], currentMode: String?, zoom: CGFloat = 1.0, onSelect: @escaping (String) -> Void) {
         // Update view model
+        viewModel.zoom = zoom
         viewModel.modes = modes
         viewModel.activeMode = currentMode ?? ""
         viewModel.highlightedIndex = modes.firstIndex(of: currentMode ?? "") ?? 0
@@ -155,12 +163,11 @@ final class ModePickerController {
             createPanel()
         }
 
-        // Resize to fit the updated content (mode count may have changed)
-        if let hosting = hostingView {
-            panel?.setContentSize(hosting.fittingSize)
+        // Resize to fit the updated content (mode count or zoom may have changed)
+        if let panel, let hosting = hostingView {
+            HUDPanelFitter.fit(panel: panel, hosting: hosting) { $0.center() }
         }
 
-        panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         panel?.orderFrontRegardless()
     }

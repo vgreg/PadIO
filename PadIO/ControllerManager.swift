@@ -183,6 +183,10 @@ final class ControllerManager: ObservableObject {
 
     /// Minimum axis deflection required to produce mouse/scroll events (eliminates stick drift).
     private static let axisDeadzone: Float = 0.1
+    /// Deflection needed before a thumbstick re-aims the wheel menu. Deliberately much
+    /// larger than `axisDeadzone` (which is tuned to suppress pointer drift) so the
+    /// highlight does not flicker while the stick sits near centre.
+    private static let wheelStickDeadzone: Float = 0.4
 
     // MARK: - Hold state machine
 
@@ -263,8 +267,13 @@ final class ControllerManager: ObservableObject {
             previousButtonStates[id] = prev
             holdStates[id] = holds
 
-            // Continuous axis dispatch (mouse move / scroll) — only when no overlay is visible
-            guard !helpOverlay.isVisible && !modePicker.isVisible && !customMenu.isVisible else { continue }
+            // While an overlay is up, mouse/scroll emission stays suppressed — but a
+            // wheel-style menu still needs the raw stick to aim with.
+            if helpOverlay.isVisible || modePicker.isVisible || customMenu.isVisible {
+                let (stickX, stickY) = dominantStick(gamepad: gamepad)
+                customMenu.handleStick(x: stickX, y: stickY, deadzone: Self.wheelStickDeadzone)
+                continue
+            }
             pollAxes(gamepad: gamepad, heldButtons: prev)
         }
     }
@@ -326,6 +335,14 @@ final class ControllerManager: ObservableObject {
         }
     }
 
+    /// Returns whichever thumbstick is deflected further from centre, so either stick
+    /// can aim a wheel menu.
+    private func dominantStick(gamepad: GCExtendedGamepad) -> (x: Float, y: Float) {
+        let left = (gamepad.leftThumbstick.xAxis.value, gamepad.leftThumbstick.yAxis.value)
+        let right = (gamepad.rightThumbstick.xAxis.value, gamepad.rightThumbstick.yAxis.value)
+        return hypot(right.0, right.1) > hypot(left.0, left.1) ? right : left
+    }
+
     /// Returns the normalised (x, y) axis values for the given axis source (-1…+1).
     /// Dpad is treated as digital: produces ±1 per direction, 0 when not pressed.
     private func readAxisValues(axisID: AxisID, gamepad: GCExtendedGamepad) -> (x: Float, y: Float) {
@@ -372,7 +389,7 @@ final class ControllerManager: ObservableObject {
         guard let (profileName, profile) = mappingResolver.resolveProfile(bundleID: bundleID, config: config) else {
             print("[PadIO] \(buttonID.rawValue) | no profile")
             if config.debugOverlay ?? false {
-                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile", postEventAccess: CGPreflightPostEventAccess())
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no profile", postEventAccess: CGPreflightPostEventAccess(), zoom: config.resolvedHUDZoom)
             }
             return
         }
@@ -391,13 +408,13 @@ final class ControllerManager: ObservableObject {
         ) else {
             print("[PadIO] No mapping for \(buttonID.rawValue)")
             if config.debugOverlay ?? false {
-                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping", postEventAccess: CGPreflightPostEventAccess())
+                debugOverlay.show(button: buttonID.rawValue, actionDescription: "no mapping", postEventAccess: CGPreflightPostEventAccess(), zoom: config.resolvedHUDZoom)
             }
             return
         }
 
         if config.debugOverlay ?? false {
-            debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action), postEventAccess: CGPreflightPostEventAccess())
+            debugOverlay.show(button: buttonID.rawValue, actionDescription: MappingResolver.describe(action), postEventAccess: CGPreflightPostEventAccess(), zoom: config.resolvedHUDZoom)
         }
         executeAction(action, profile: profile, profileName: profileName, currentMode: modeName)
     }
@@ -424,7 +441,7 @@ final class ControllerManager: ObservableObject {
             config: config
         )
 
-        helpOverlay.show(profileName: profileName, modeName: modeName, entries: entries) { [weak self] buttonName in
+        helpOverlay.show(profileName: profileName, modeName: modeName, entries: entries, zoom: config.resolvedHUDZoom) { [weak self] buttonName in
             guard let self else { return }
             // Re-resolve the action for the selected button and execute it
             guard let profileResult = self.mappingResolver.resolveProfile(
@@ -476,7 +493,7 @@ final class ControllerManager: ObservableObject {
             let config = configLoader.config
             let modes = allModeNames(profile: profile, config: config)
             guard !modes.isEmpty else { return }
-            modePicker.show(modes: modes, currentMode: currentMode) { [weak self] selectedMode in
+            modePicker.show(modes: modes, currentMode: currentMode, zoom: config.resolvedHUDZoom) { [weak self] selectedMode in
                 guard let self else { return }
                 self.profileModes[profileName] = selectedMode
                 self.activeModeName = selectedMode
@@ -512,7 +529,9 @@ final class ControllerManager: ObservableObject {
                 return
             }
             let labels = menuConfig.items.map { $0.label }
-            customMenu.show(title: name, labels: labels) { [weak self] index in
+            // Per-menu style wins over the top-level default; both fall back to the list.
+            let style = MenuStyle.resolve(menuConfig.style) ?? MenuStyle.resolve(config.menuStyle) ?? .list
+            customMenu.show(title: name, labels: labels, style: style, zoom: config.resolvedHUDZoom) { [weak self] index in
                 guard let self else { return }
                 guard menuConfig.items.indices.contains(index) else { return }
                 let itemAction = menuConfig.items[index].action
@@ -713,7 +732,7 @@ final class ControllerManager: ObservableObject {
     private func switchMode(_ modeName: String, profileName: String) {
         profileModes[profileName] = modeName
         activeModeName = modeName
-        modeNotification.show(modeName: modeName)
+        modeNotification.show(modeName: modeName, zoom: configLoader.config.resolvedHUDZoom)
         print("[PadIO] Mode changed to '\(modeName)' in profile '\(profileName)'")
     }
 

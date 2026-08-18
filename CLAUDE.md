@@ -43,6 +43,7 @@ pollControllers()
 | File | Role |
 |------|------|
 | `ControllerManager.swift` | Central orchestrator — owns all sub-components, drives the 60Hz loop, resolves and executes actions |
+| `HUDZoom.swift` | Shared `hud_zoom` scaling wrapper for every overlay + `HUDPanelFitter` (layout → size → position) |
 | `MappingResolver.swift` | Pure translation layer — config → `Action` enum; contains all key name and modifier mappings |
 | `MappingConfig.swift` | Codable config types + `ConfigLoader` (hot-reload via `DispatchSource`) |
 | `InputHandler.swift` | Low-level CGEvent emission — keystrokes, text injection, mouse, scroll, media keys, input source cycling |
@@ -51,6 +52,7 @@ pollControllers()
 | `ButtonIdentifier.swift` | `ButtonID` and `AxisID` enums; maps `GCControllerElement` references to canonical names |
 | `ContentView.swift` | Menu bar dropdown UI — status display, permission grant, reload/quit |
 | `*Overlay.swift` files | Floating `NSPanel` HUDs, each with a SwiftUI view + `@Observable` view model + controller class |
+| `CustomMenuWheelView.swift` | Circular ("donut") presentation for custom menus, selected by `menu_style` / per-menu `style` |
 
 ### Config Resolution Cascade
 
@@ -76,7 +78,7 @@ While an overlay is visible, input is consumed before reaching the mapping pipel
 3. `CustomMenuController` — blocks input while visible
 4. `menu` button always opens Help (checked before any mapping)
 
-Axis events (`pollAxes`) are suppressed entirely while any overlay is visible.
+Axis-to-pointer emission (`pollAxes`) is suppressed while any overlay is visible. The raw sticks are still read in that branch and forwarded to `CustomMenuController.handleStick`, which is how a wheel-style menu is aimed; it is a no-op for every other overlay and for the list style.
 
 ### Action Types
 

@@ -19,23 +19,76 @@ struct MenuItemConfig: Codable, Sendable {
     let action: ActionConfig
 }
 
+/// How a custom menu is presented on screen.
+/// Stored in the config as a raw string and resolved via `resolve(_:)` at the point of use,
+/// matching how every other string discriminant in this config is handled.
+enum MenuStyle: String, Sendable {
+    /// Vertical scrolling list — the default.
+    case list
+    /// Circular "donut" — items arranged on a ring, aimed with a thumbstick.
+    case wheel
+
+    /// Maps a raw config string onto a style.
+    /// Returns `nil` for a missing value (so the caller can fall back to a wider default)
+    /// and, for an unrecognised value, warns and returns `nil` rather than throwing —
+    /// a typo must not blank the whole config on hot-reload.
+    static func resolve(_ raw: String?) -> MenuStyle? {
+        guard let raw, !raw.isEmpty else { return nil }
+        switch raw.lowercased() {
+        case "list":                     return .list
+        case "wheel", "donut", "radial": return .wheel
+        default:
+            print("[PadIO] unknown menu style '\(raw)', using default")
+            return nil
+        }
+    }
+}
+
 /// A named custom menu — an ordered list of label/action pairs.
-/// Stored as a JSON array for clean config authoring.
+///
+/// Accepts two JSON forms:
+///   - a bare array of items:            `"git": [ { "label": ..., "action": ... } ]`
+///   - an object with an explicit style: `"git": { "style": "wheel", "items": [ ... ] }`
+///
+/// The array form is the original syntax and stays valid; it inherits the top-level `menu_style`.
 struct MenuConfig: Codable, Sendable {
     let items: [MenuItemConfig]
+    /// Per-menu style override. `nil` means "inherit the top-level `menu_style`".
+    let style: String?
 
-    init(items: [MenuItemConfig]) {
+    init(items: [MenuItemConfig], style: String? = nil) {
         self.items = items
+        self.style = style
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case items
+        case style
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        items = try container.decode([MenuItemConfig].self)
+        // Try the bare-array form first, then fall back to the keyed object form.
+        if let container = try? decoder.singleValueContainer(),
+           let array = try? container.decode([MenuItemConfig].self) {
+            items = array
+            style = nil
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decode([MenuItemConfig].self, forKey: .items)
+        style = try container.decodeIfPresent(String.self, forKey: .style)
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(items)
+        // Round-trip to whichever form the menu was authored in.
+        guard let style else {
+            var container = encoder.singleValueContainer()
+            try container.encode(items)
+            return
+        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+        try container.encode(style, forKey: .style)
     }
 }
 
@@ -101,6 +154,12 @@ struct MappingConfig: Codable, Sendable {
     /// that are context-driven). Hidden modes stay reachable via setMode, external context,
     /// and default_mode; only the picker listing is filtered.
     var hiddenModes: [String]
+    /// Default presentation for custom menus ("list" or "wheel"). Defaults to "list" when omitted.
+    /// An individual menu can override this with its own `style` key.
+    var menuStyle: String?
+    /// Uniform scale factor for every floating HUD (help, mode picker, custom menu,
+    /// mode notification, debug overlay). Defaults to 1.0; clamped to 0.75–3.0 on use.
+    var hudZoom: Double?
 
     enum CodingKeys: String, CodingKey {
         case triggerThreshold = "trigger_threshold"
@@ -112,9 +171,11 @@ struct MappingConfig: Codable, Sendable {
         case aliases
         case sharedModes = "shared_modes"
         case hiddenModes = "hidden_modes"
+        case menuStyle = "menu_style"
+        case hudZoom = "hud_zoom"
     }
 
-    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil, aliases: [String: ActionConfig]? = nil, sharedModes: [String: ModeConfig]? = nil, hiddenModes: [String] = []) {
+    init(triggerThreshold: Double?, debugOverlay: Bool?, global: [String: ActionConfig], profiles: [String: ProfileConfig], menus: [String: MenuConfig], haptics: HapticsConfig? = nil, aliases: [String: ActionConfig]? = nil, sharedModes: [String: ModeConfig]? = nil, hiddenModes: [String] = [], menuStyle: String? = nil, hudZoom: Double? = nil) {
         self.triggerThreshold = triggerThreshold
         self.debugOverlay = debugOverlay
         self.global = global
@@ -124,6 +185,8 @@ struct MappingConfig: Codable, Sendable {
         self.aliases = aliases
         self.sharedModes = sharedModes
         self.hiddenModes = hiddenModes
+        self.menuStyle = menuStyle
+        self.hudZoom = hudZoom
     }
 
     init(from decoder: Decoder) throws {
@@ -137,6 +200,13 @@ struct MappingConfig: Codable, Sendable {
         aliases          = try container.decodeIfPresent([String: ActionConfig].self, forKey: .aliases)
         sharedModes      = try container.decodeIfPresent([String: ModeConfig].self, forKey: .sharedModes)
         hiddenModes      = try container.decodeIfPresent([String].self, forKey: .hiddenModes) ?? []
+        menuStyle        = try container.decodeIfPresent(String.self, forKey: .menuStyle)
+        hudZoom          = try container.decodeIfPresent(Double.self, forKey: .hudZoom)
+    }
+
+    /// `hud_zoom` clamped to a sane range, with the 1.0 default applied.
+    var resolvedHUDZoom: CGFloat {
+        CGFloat(min(max(hudZoom ?? 1.0, 0.75), 3.0))
     }
 
     static let empty = MappingConfig(triggerThreshold: nil, debugOverlay: nil, global: [:], profiles: [:], menus: [:])
