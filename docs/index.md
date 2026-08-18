@@ -16,7 +16,7 @@ If you're looking for a friendlier GUI-based controller remapper, search "Game C
 - **Mouse & scroll** — map sticks/dpad to cursor movement and scroll wheel with speed modifiers
 - **Per-app profiles** — automatic profile switching based on the frontmost application
 - **Modes** — multiple binding sets per profile, switchable via picker, cycling, or direct jump
-- **Custom menus** — define popup menus with labeled items that trigger any action
+- **Custom menus** — define popup menus with labeled items that trigger any action, as a list or a circular wheel you aim with the stick
 - **Haptic feedback** — rumble on system beep, notifications, or on-demand from any binding
 - **Media keys** — play/pause, track skip, volume, brightness (no Accessibility permission needed)
 - **Hot-reload** — save the config file and changes take effect instantly

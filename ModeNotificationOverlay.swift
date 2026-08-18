@@ -14,6 +14,8 @@ import Observation
 @Observable
 final class ModeNotificationViewModel {
     var modeName: String = ""
+    /// Uniform HUD scale from the `hud_zoom` config key.
+    var zoom: CGFloat = 1.0
 }
 
 // MARK: - SwiftUI View
@@ -22,6 +24,11 @@ struct ModeNotificationView: View {
     let viewModel: ModeNotificationViewModel
 
     var body: some View {
+        HUDZoom(zoom: viewModel.zoom) { content }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Text(viewModel.modeName)
             .font(.system(size: 36, weight: .semibold, design: .monospaced))
             .foregroundStyle(.primary)
@@ -47,8 +54,9 @@ final class ModeNotificationController {
 
     // MARK: - Show
 
-    func show(modeName: String) {
+    func show(modeName: String, zoom: CGFloat = 1.0) {
         viewModel.modeName = modeName
+        viewModel.zoom = zoom
 
         if panel == nil { createPanel() }
 
@@ -113,17 +121,15 @@ final class ModeNotificationController {
     }
 
     private func repositionPanel() {
-        guard let panel, let screen = NSScreen.main else { return }
-        // Flush pending layout so fittingSize reflects the new content
-        if let hosting = panel.contentView as? NSHostingView<ModeNotificationView> {
-            hosting.layoutSubtreeIfNeeded()
-            panel.setContentSize(hosting.fittingSize)
+        guard let panel, let hosting = panel.contentView else { return }
+        HUDPanelFitter.fit(panel: panel, hosting: hosting) { panel in
+            guard let screen = NSScreen.main else { return }
+            let screenFrame = screen.visibleFrame
+            let panelSize = panel.frame.size
+            // Position near top center — 120pt below the menu bar
+            let x = screenFrame.midX - panelSize.width / 2
+            let y = screenFrame.maxY - panelSize.height - 120
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
-        let screenFrame = screen.visibleFrame
-        let panelSize = panel.frame.size
-        // Position near top center — 120pt below the menu bar
-        let x = screenFrame.midX - panelSize.width / 2
-        let y = screenFrame.maxY - panelSize.height - 120
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 }

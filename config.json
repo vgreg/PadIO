@@ -1,6 +1,7 @@
 {
   "trigger_threshold": 0.5,
   "debug_overlay": true,
+  "hud_zoom": 1.0,
   "aliases": {
     "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] }
   },
@@ -131,6 +132,16 @@
       { "label": "git push",    "action": { "type": "keystroke", "key": "`git push\n`" } },
       { "label": "git stash",   "action": { "type": "keystroke", "key": "`git stash\n`" } },
       { "label": "git stash pop", "action": { "type": "keystroke", "key": "`git stash pop\n`" } }
-    ]
+    ],
+    "window": {
+      "style": "wheel",
+      "items": [
+        { "label": "Left half",  "action": { "type": "keystroke", "key": "left",  "modifiers": ["ctrl", "opt"] } },
+        { "label": "Right half", "action": { "type": "keystroke", "key": "right", "modifiers": ["ctrl", "opt"] } },
+        { "label": "Top half",   "action": { "type": "keystroke", "key": "up",    "modifiers": ["ctrl", "opt"] } },
+        { "label": "Maximize",   "action": { "type": "keystroke", "key": "f",     "modifiers": ["ctrl", "opt"] } },
+        { "label": "Centre",     "action": { "type": "keystroke", "key": "c",     "modifiers": ["ctrl", "opt"] } }
+      ]
+    }
   }
 }

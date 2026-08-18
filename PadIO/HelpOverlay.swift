@@ -19,6 +19,8 @@ final class HelpViewModel {
     var entries: [(button: String, action: String)] = []
     /// Currently highlighted row index for dpad scrolling.
     var highlightedIndex: Int = 0
+    /// Uniform HUD scale from the `hud_zoom` config key.
+    var zoom: CGFloat = 1.0
 
     func scrollUp() {
         guard !entries.isEmpty else { return }
@@ -39,6 +41,11 @@ struct HelpView: View {
     let onClose: () -> Void
 
     var body: some View {
+        HUDZoom(zoom: viewModel.zoom) { content }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 2) {
@@ -144,11 +151,13 @@ struct HelpView: View {
 final class HelpController {
     private var panel: NSPanel?
     private let viewModel = HelpViewModel()
+    private var hostingView: NSHostingView<HelpView>?
     private var onTrigger: ((String) -> Void)?
 
     // MARK: - Show / Hide
 
-    func show(profileName: String, modeName: String, entries: [(button: String, action: String)], onTrigger: @escaping (String) -> Void) {
+    func show(profileName: String, modeName: String, entries: [(button: String, action: String)], zoom: CGFloat = 1.0, onTrigger: @escaping (String) -> Void) {
+        viewModel.zoom = zoom
         viewModel.profileName = profileName
         viewModel.modeName = modeName
         viewModel.entries = entries
@@ -157,7 +166,11 @@ final class HelpController {
 
         if panel == nil { createPanel() }
 
-        panel?.center()
+        // Resize to fit the updated content (entry count or zoom may have changed)
+        if let panel, let hosting = hostingView {
+            HUDPanelFitter.fit(panel: panel, hosting: hosting) { $0.center() }
+        }
+
         panel?.makeKeyAndOrderFront(nil)
         panel?.orderFrontRegardless()
     }
@@ -226,6 +239,7 @@ final class HelpController {
         let fittingSize = hosting.fittingSize
         p.setContentSize(fittingSize)
 
+        hostingView = hosting
         panel = p
     }
 }

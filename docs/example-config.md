@@ -6,6 +6,7 @@ A complete annotated config demonstrating profiles, modes, sequences, custom men
 {
   "trigger_threshold": 0.5,
   "debug_overlay": false,
+  "hud_zoom": 1.0,
   "aliases": {
     "tmux_leader": { "type": "keystroke", "key": "a", "modifiers": ["ctrl"] }
   },
